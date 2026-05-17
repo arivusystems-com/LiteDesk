@@ -15,9 +15,19 @@ const {
   runGmailInboxSyncForMailbox,
   listGmailLabelsForMailbox,
   normalizeGmailSyncLabelIds,
-  assertPersonalOwner
+  isGmailMailboxReady
 } = require('../services/mailboxGmailInboxSyncService');
+const {
+  assertGmailSyncManageAccess,
+  assertGmailSyncRunAccess
+} = require('../services/mailboxAccessService');
 const { getGmailOAuthAppCredentialsForServer } = require('../platform/communication/config/communicationConfigService');
+const {
+  getOrganizationGmailSmtpRelay,
+  connectMailboxGmailSmtp,
+  disconnectMailboxGmailSmtp,
+  isMailboxGmailSmtpReady
+} = require('../services/mailboxGmailSmtpService');
 
 function toId(value) {
   if (value == null) return null;
@@ -32,6 +42,8 @@ function serializeMailbox(doc) {
   const hasGmailToken = Boolean(
     o.inboxProvider === 'google' && String(o.inboxSyncEncryptedRefreshToken || '').length > 0
   );
+  const gmailReady = hasGmailToken && isGmailMailboxReady(o);
+  const gmailSmtpReady = isMailboxGmailSmtpReady(o);
   return {
     id: String(o._id),
     organizationId: o.organizationId ? String(o.organizationId) : undefined,
@@ -44,14 +56,20 @@ function serializeMailbox(doc) {
     status: o.status,
     syncStatus: o.syncStatus,
     inboxProvider: o.inboxProvider || 'none',
+    outboundChannel: o.outboundChannel || 'none',
     gmailInboxSync: {
-      connected: hasGmailToken,
+      connected: gmailReady,
+      hasStoredToken: hasGmailToken,
       accountEmail: o.inboxSyncAccountEmail || '',
       lastSyncAt: o.lastInboxSyncAt || null,
       lastError: o.lastInboxSyncError ? String(o.lastInboxSyncError).slice(0, 500) : '',
       syncLabelIds: Array.isArray(o.gmailSyncLabelIds)
         ? o.gmailSyncLabelIds.map((x) => String(x).trim()).filter(Boolean)
         : []
+    },
+    gmailSmtpOutbound: {
+      connected: gmailSmtpReady,
+      verifiedAt: o.smtpOutboundVerifiedAt || null
     },
     createdAt: o.createdAt,
     updatedAt: o.updatedAt
@@ -83,6 +101,7 @@ async function listMailboxes(req, res) {
     const canCreatePersonal = personal.length === 0;
 
     const gmailOAuthCheck = await getGmailOAuthAppCredentialsForServer(orgId);
+    const gmailSmtpRelay = await getOrganizationGmailSmtpRelay(orgId);
 
     const includeThreadCounts = String(req.query.includeThreadCounts || '').toLowerCase() === 'true';
     const includeDoneForCounts = String(req.query.includeDone || '').toLowerCase() === 'true';
@@ -119,7 +138,8 @@ async function listMailboxes(req, res) {
         flags: {
           canCreatePersonal,
           canCreateGroup,
-          gmailOAuthAppConfigured: !gmailOAuthCheck.error
+          gmailOAuthAppConfigured: !gmailOAuthCheck.error,
+          gmailSmtpOrgConfigured: Boolean(gmailSmtpRelay)
         },
         ...(includeThreadCounts && allMailThreadUnread != null ? { allMailThreadUnread } : {})
       }
@@ -332,7 +352,7 @@ async function gmailOAuthCallback(req, res) {
 }
 
 /**
- * GET /api/mailboxes/:id/inbox-sync/google/start — returns Google OAuth URL (personal mailbox only).
+ * GET /api/mailboxes/:id/inbox-sync/google/start — returns Google OAuth URL (personal or shared mailbox).
  */
 async function gmailInboxSyncGoogleStart(req, res) {
   try {
@@ -343,9 +363,9 @@ async function gmailInboxSyncGoogleStart(req, res) {
       return res.status(400).json({ success: false, message: 'Invalid mailbox id' });
     }
     const mailbox = await Mailbox.findOne({ _id: id, organizationId: orgId }).lean();
-    const ownerErr = assertPersonalOwner(mailbox, userId);
-    if (ownerErr) {
-      return res.status(403).json({ success: false, message: ownerErr });
+    const accessErr = assertGmailSyncManageAccess(mailbox, req.user);
+    if (accessErr) {
+      return res.status(403).json({ success: false, message: accessErr });
     }
     const loginHintRaw =
       req.query?.login_hint != null
@@ -382,9 +402,9 @@ async function gmailInboxSyncRun(req, res) {
       return res.status(400).json({ success: false, message: 'Invalid mailbox id' });
     }
     const mailbox = await Mailbox.findOne({ _id: id, organizationId: orgId }).lean();
-    const ownerErr = assertPersonalOwner(mailbox, userId);
-    if (ownerErr) {
-      return res.status(403).json({ success: false, message: ownerErr });
+    const accessErr = assertGmailSyncRunAccess(mailbox, req.user);
+    if (accessErr) {
+      return res.status(403).json({ success: false, message: accessErr });
     }
     if (!mailbox || mailbox.inboxProvider !== 'google' || !mailbox.inboxSyncEncryptedRefreshToken) {
       return res.status(400).json({
@@ -406,6 +426,7 @@ async function gmailInboxSyncRun(req, res) {
       return res.status(502).json({
         success: false,
         message: result.error,
+        code: result.code || undefined,
         data: { imported: result.imported, skipped: result.skipped }
       });
     }
@@ -449,9 +470,9 @@ async function listGmailInboxSyncLabels(req, res) {
       return res.status(400).json({ success: false, message: 'Invalid mailbox id' });
     }
     const mailbox = await Mailbox.findOne({ _id: id, organizationId: orgId }).lean();
-    const ownerErr = assertPersonalOwner(mailbox, userId);
-    if (ownerErr) {
-      return res.status(403).json({ success: false, message: ownerErr });
+    const accessErr = assertGmailSyncRunAccess(mailbox, req.user);
+    if (accessErr) {
+      return res.status(403).json({ success: false, message: accessErr });
     }
     if (!mailbox || mailbox.inboxProvider !== 'google' || !mailbox.inboxSyncEncryptedRefreshToken) {
       return res.status(400).json({
@@ -493,9 +514,9 @@ async function patchGmailInboxSyncSyncLabels(req, res) {
       return res.status(400).json({ success: false, message: 'Invalid mailbox id' });
     }
     const mailbox = await Mailbox.findOne({ _id: id, organizationId: orgId }).lean();
-    const ownerErr = assertPersonalOwner(mailbox, userId);
-    if (ownerErr) {
-      return res.status(403).json({ success: false, message: ownerErr });
+    const accessErr = assertGmailSyncManageAccess(mailbox, req.user);
+    if (accessErr) {
+      return res.status(403).json({ success: false, message: accessErr });
     }
     if (!mailbox || mailbox.inboxProvider !== 'google' || !mailbox.inboxSyncEncryptedRefreshToken) {
       return res.status(400).json({
@@ -537,6 +558,68 @@ async function patchGmailInboxSyncSyncLabels(req, res) {
 /**
  * POST /api/mailboxes/:id/inbox-sync/google/disconnect
  */
+/**
+ * POST /api/mailboxes/:id/outbound/gmail-smtp/connect
+ * Body: { emailAddress, appPassword }
+ */
+async function connectMailboxGmailSmtpHandler(req, res) {
+  try {
+    const orgId = req.user.organizationId;
+    const id = toId(req.params.id);
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'Invalid mailbox id' });
+    }
+    const mailbox = await Mailbox.findOne({ _id: id, organizationId: orgId }).lean();
+    const accessErr = assertGmailSyncManageAccess(mailbox, req.user);
+    if (accessErr) {
+      return res.status(403).json({ success: false, message: accessErr });
+    }
+    const { emailAddress, appPassword } = req.body || {};
+    const result = await connectMailboxGmailSmtp({
+      organizationId: orgId,
+      mailboxId: id,
+      emailAddress,
+      appPassword
+    });
+    if (!result.ok) {
+      return res.status(400).json({
+        success: false,
+        message: result.error,
+        code: result.code
+      });
+    }
+    const updated = await Mailbox.findOne({ _id: id, organizationId: orgId }).lean();
+    return res.json({
+      success: true,
+      data: { mailbox: serializeMailbox(updated) }
+    });
+  } catch (err) {
+    console.error('[mailboxController] connectMailboxGmailSmtp:', err);
+    return res.status(500).json({ success: false, message: 'Failed to connect Gmail SMTP' });
+  }
+}
+
+async function disconnectMailboxGmailSmtpHandler(req, res) {
+  try {
+    const orgId = req.user.organizationId;
+    const id = toId(req.params.id);
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'Invalid mailbox id' });
+    }
+    const mailbox = await Mailbox.findOne({ _id: id, organizationId: orgId }).lean();
+    const accessErr = assertGmailSyncManageAccess(mailbox, req.user);
+    if (accessErr) {
+      return res.status(403).json({ success: false, message: accessErr });
+    }
+    await disconnectMailboxGmailSmtp(id, orgId);
+    const updated = await Mailbox.findOne({ _id: id, organizationId: orgId }).lean();
+    return res.json({ success: true, data: { mailbox: serializeMailbox(updated) } });
+  } catch (err) {
+    console.error('[mailboxController] disconnectMailboxGmailSmtp:', err);
+    return res.status(500).json({ success: false, message: 'Failed to disconnect Gmail SMTP' });
+  }
+}
+
 async function gmailInboxSyncDisconnect(req, res) {
   try {
     const orgId = req.user.organizationId;
@@ -546,9 +629,13 @@ async function gmailInboxSyncDisconnect(req, res) {
       return res.status(400).json({ success: false, message: 'Invalid mailbox id' });
     }
     const mailbox = await Mailbox.findOne({ _id: id, organizationId: orgId }).lean();
-    const ownerErr = assertPersonalOwner(mailbox, userId);
-    if (ownerErr) {
-      return res.status(403).json({ success: false, message: ownerErr });
+    const accessErr = assertGmailSyncManageAccess(mailbox, req.user);
+    if (accessErr) {
+      return res.status(403).json({ success: false, message: accessErr });
+    }
+    if (mailbox?.inboxProvider === 'google') {
+      const { stopGmailWatchForMailbox } = require('../services/gmailWatchService');
+      await stopGmailWatchForMailbox(mailbox).catch(() => {});
     }
     await Mailbox.updateOne(
       { _id: id, organizationId: orgId },
@@ -559,6 +646,8 @@ async function gmailInboxSyncDisconnect(req, res) {
           inboxSyncAccountEmail: '',
           gmailHistoryId: '',
           gmailSyncLabelIds: [],
+          gmailWatchExpiration: null,
+          gmailWatchTopic: '',
           lastInboxSyncError: '',
           syncStatus: 'not_configured'
         }
@@ -581,5 +670,7 @@ module.exports = {
   gmailInboxSyncRun,
   listGmailInboxSyncLabels,
   patchGmailInboxSyncSyncLabels,
-  gmailInboxSyncDisconnect
+  gmailInboxSyncDisconnect,
+  connectMailboxGmailSmtpHandler,
+  disconnectMailboxGmailSmtpHandler
 };

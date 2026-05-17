@@ -6,7 +6,8 @@ const mailboxes = ref([]);
 const flags = ref({
   canCreatePersonal: false,
   canCreateGroup: false,
-  gmailOAuthAppConfigured: false
+  gmailOAuthAppConfigured: false,
+  gmailSmtpOrgConfigured: false
 });
 const loading = ref(false);
 const loaded = ref(false);
@@ -17,10 +18,16 @@ const personalMailbox = computed(
   () => mailboxes.value.find((m) => m.kind === 'personal') || null
 );
 
-/** True when any supported inbox provider is linked on the user's personal mailbox. */
+const groupMailboxes = computed(() => mailboxes.value.filter((m) => m.kind === 'group'));
+
+const hasConnectedGroupMailbox = computed(() =>
+  groupMailboxes.value.some((m) => isMailboxConnectedForProvider(m, 'google'))
+);
+
+/** True when any supported inbox provider is linked (personal or shared mailbox). */
 const hasConnectedInbox = computed(() =>
   mailboxes.value.some(
-    (m) => m.kind === 'personal' && isMailboxConnectedForProvider(m, 'google')
+    (m) => isMailboxConnectedForProvider(m, 'google') || isMailboxConnectedForProvider(m, 'google-smtp')
   )
 );
 
@@ -44,7 +51,8 @@ async function refreshMailboxes() {
         flags.value = {
           canCreatePersonal: Boolean(res.data.flags?.canCreatePersonal),
           canCreateGroup: Boolean(res.data.flags?.canCreateGroup),
-          gmailOAuthAppConfigured: Boolean(res.data.flags?.gmailOAuthAppConfigured)
+          gmailOAuthAppConfigured: Boolean(res.data.flags?.gmailOAuthAppConfigured),
+          gmailSmtpOrgConfigured: Boolean(res.data.flags?.gmailSmtpOrgConfigured)
         };
       } else {
         mailboxes.value = [];
@@ -75,6 +83,27 @@ async function ensurePersonalMailbox() {
 }
 
 /**
+ * @param {{ label: string, emailAddress?: string, memberUserIds?: string[] }} input
+ */
+async function ensureGroupMailbox(input = {}) {
+  const label = String(input.label || 'Shared inbox').trim();
+  if (!label) return null;
+  if (!flags.value.canCreateGroup) return null;
+  const body = {
+    kind: 'group',
+    label,
+    emailAddress: input.emailAddress ? String(input.emailAddress).trim() : '',
+    memberUserIds: Array.isArray(input.memberUserIds) ? input.memberUserIds : []
+  };
+  const res = await apiClient('/mailboxes', { method: 'POST', body: JSON.stringify(body) });
+  if (res?.success && res?.data?.mailbox) {
+    await refreshMailboxes();
+    return res.data.mailbox;
+  }
+  return null;
+}
+
+/**
  * Shared mailbox connection state for inbox + compose gating.
  */
 export function useMailboxConnection() {
@@ -84,10 +113,13 @@ export function useMailboxConnection() {
     loading,
     loaded,
     personalMailbox,
+    groupMailboxes,
     hasConnectedInbox,
+    hasConnectedGroupMailbox,
     connectedPersonalMailbox,
     gmailOAuthReady,
     refreshMailboxes,
-    ensurePersonalMailbox
+    ensurePersonalMailbox,
+    ensureGroupMailbox
   };
 }

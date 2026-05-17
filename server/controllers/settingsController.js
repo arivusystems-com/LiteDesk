@@ -56,22 +56,31 @@ function sanitizeEmailConfigForResponse(config = {}) {
         smtpUser: normalized.smtpUser || '',
         smtpSecure: normalized.smtpSecure === true,
         smtpPassMasked: normalized.smtpPass ? maskSecret(normalized.smtpPass) : '',
-        hasSmtpPass: !!normalized.smtpPass
+        hasSmtpPass: !!normalized.smtpPass,
+        awsRegion: normalized.awsRegion || '',
+        awsAccessKeyId: normalized.awsAccessKeyId || '',
+        awsSecretAccessKeyMasked: normalized.awsSecretAccessKey
+            ? maskSecret(normalized.awsSecretAccessKey)
+            : '',
+        hasAwsSecretAccessKey: !!normalized.awsSecretAccessKey
     };
 }
 
 function getEnvEmailConfigFallback() {
-    return applyOciEmailDeliveryDefaults({
-        provider: process.env.EMAIL_PROVIDER || '',
+    const { applyResendDefaults } = require('../constants/resendDefaults');
+    const smtpPortRaw = process.env.SMTP_PORT;
+    const smtpPort = smtpPortRaw ? Number(smtpPortRaw) || 587 : 587;
+    return applyResendDefaults({
+        provider: process.env.EMAIL_PROVIDER || 'resend',
         fromEmail: process.env.EMAIL_FROM || '',
         fromName: process.env.EMAIL_FROM_NAME || '',
         replyTo: process.env.EMAIL_REPLY_TO || '',
         ociRegion: process.env.OCI_EMAIL_REGION || process.env.OCI_REGION || '',
         smtpHost: process.env.SMTP_HOST || '',
-        smtpPort: process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) || process.env.SMTP_PORT : '',
-        smtpUser: process.env.SMTP_USER || process.env.OCI_SMTP_USER || '',
-        smtpSecure: String(process.env.SMTP_PORT || '') === '465',
-        smtpPass: process.env.SMTP_PASS || process.env.OCI_SMTP_PASS || ''
+        smtpPort,
+        smtpUser: process.env.SMTP_USER || '',
+        smtpSecure: String(smtpPort) === '465',
+        smtpPass: process.env.SMTP_PASS || process.env.RESEND_API_KEY || ''
     });
 }
 
@@ -1960,6 +1969,12 @@ exports.getIntegration = async (req, res) => {
                     ? rawGmailPolicy
                     : { clientId: '', redirectUri: '', hasClientSecret: false }
             };
+            payload.emailPlatformDefaults = {
+                crmOutboundProvider: 'resend',
+                notificationProvider: 'oci-email-delivery',
+                notificationChannelNote:
+                    'In-app notification emails use the platform system mailer (OCI). CRM sends use the provider configured below unless a user connects their own Gmail mailbox.'
+            };
         }
 
         res.json({
@@ -2005,6 +2020,9 @@ exports.updateIntegrationConfig = async (req, res) => {
             smtpUser,
             smtpPass,
             smtpSecure,
+            awsRegion,
+            awsAccessKeyId,
+            awsSecretAccessKey,
             communicationPolicy
         } = req.body || {};
         const isOwnerLike = req.user?.isOwner === true || String(req.user?.role || '').toLowerCase() === 'owner';
@@ -2044,6 +2062,12 @@ exports.updateIntegrationConfig = async (req, res) => {
                     message: 'OCI Email Delivery requires smtpHost or ociRegion (e.g. us-phoenix-1)'
                 });
             }
+        } else if (providerKey === 'gmail-smtp') {
+            if (!resolvedSmtpHost) {
+                resolvedSmtpHost = 'smtp.gmail.com';
+            }
+        } else if (providerKey === 'aws-ses') {
+            resolvedSmtpHost = resolvedSmtpHost || '';
         } else if (!resolvedSmtpHost || !smtpPort || !smtpUser) {
             return res.status(400).json({
                 success: false,
@@ -2051,11 +2075,29 @@ exports.updateIntegrationConfig = async (req, res) => {
             });
         }
 
-        if (!smtpPort || !smtpUser) {
+        if (
+            providerKey !== 'gmail-smtp'
+            && providerKey !== 'aws-ses'
+            && (!smtpPort || !smtpUser)
+        ) {
             return res.status(400).json({
                 success: false,
                 message: 'smtpPort and smtpUser are required'
             });
+        }
+
+        if (providerKey === 'aws-ses') {
+            const region = String(awsRegion || prevConfig.awsRegion || '').trim();
+            const keyId = String(awsAccessKeyId || prevConfig.awsAccessKeyId || '').trim();
+            const secretProvided =
+                awsSecretAccessKey !== undefined && String(awsSecretAccessKey).trim() !== '';
+            const hasSecret = secretProvided || Boolean(prevConfig.awsSecretAccessKey);
+            if (!region || !keyId || !hasSecret) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'AWS SES requires awsRegion, awsAccessKeyId, and awsSecretAccessKey'
+                });
+            }
         }
 
         const baselineConfig = Object.keys(prevConfig).length > 0
@@ -2072,7 +2114,14 @@ exports.updateIntegrationConfig = async (req, res) => {
             resolvedSmtpPass = '';
         }
 
-        const nextConfig = applyOciEmailDeliveryDefaults({
+        const awsSecretProvided =
+            awsSecretAccessKey !== undefined && String(awsSecretAccessKey).trim() !== '';
+        let resolvedAwsSecret = awsSecretProvided
+            ? String(awsSecretAccessKey).trim()
+            : (prevConfig.awsSecretAccessKey || '');
+
+        const { applyGmailSmtpDefaults } = require('../constants/gmailSmtpDefaults');
+        let nextConfig = applyOciEmailDeliveryDefaults({
             provider: providerKey,
             fromEmail: String(fromEmail || '').trim(),
             fromName: String(fromName || '').trim(),
@@ -2082,13 +2131,34 @@ exports.updateIntegrationConfig = async (req, res) => {
             smtpPort: Number(smtpPort) || 587,
             smtpUser: String(smtpUser || '').trim(),
             smtpSecure: smtpSecure === true || String(smtpSecure).toLowerCase() === 'true',
-            smtpPass: resolvedSmtpPass
+            smtpPass: resolvedSmtpPass,
+            awsRegion: String(awsRegion || prevConfig.awsRegion || '').trim(),
+            awsAccessKeyId: String(awsAccessKeyId || prevConfig.awsAccessKeyId || '').trim(),
+            awsSecretAccessKey: resolvedAwsSecret
         });
+        nextConfig = applyGmailSmtpDefaults(nextConfig);
 
-        const criticalFields = ['provider', 'fromEmail', 'ociRegion', 'smtpHost', 'smtpPort', 'smtpUser', 'smtpPass'];
+        const criticalFields = [
+            'provider',
+            'fromEmail',
+            'ociRegion',
+            'smtpHost',
+            'smtpPort',
+            'smtpUser',
+            'smtpPass',
+            'awsRegion',
+            'awsAccessKeyId',
+            'awsSecretAccessKey'
+        ];
         const changedCriticalFields = criticalFields.filter((fieldKey) => {
             if (fieldKey === 'smtpPass') {
                 if (smtpPass === undefined || String(smtpPass).trim() === '') return false;
+                return true;
+            }
+            if (fieldKey === 'awsSecretAccessKey') {
+                if (awsSecretAccessKey === undefined || String(awsSecretAccessKey).trim() === '') {
+                    return false;
+                }
                 return true;
             }
             return toComparable(nextConfig[fieldKey]) !== toComparable(baselineConfig[fieldKey]);

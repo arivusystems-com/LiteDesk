@@ -83,7 +83,7 @@ async function resolveBySubjectFallback(organizationId, subject, fromAddress) {
  * @returns {Promise<{
  *   parent: object | null,
  *   threadId: any | null,
- *   strategy: 'rfc_headers' | 'recent_related' | 'subject_fallback' | 'new_thread'
+ *   strategy: 'crm_reply_token' | 'rfc_headers' | 'recent_related' | 'subject_fallback' | 'new_thread'
  * }>}
  */
 async function resolveThread({
@@ -92,8 +92,25 @@ async function resolveThread({
   references,
   relatedTo,
   fromAddress,
-  subject
+  subject,
+  preferredThreadId = null
 }) {
+  if (preferredThreadId && organizationId) {
+    const preferred = await Communication.findOne({
+      organizationId,
+      $or: [{ _id: preferredThreadId }, { threadId: preferredThreadId }]
+    })
+      .sort({ createdAt: -1 })
+      .lean();
+    if (preferred) {
+      return {
+        parent: preferred,
+        threadId: preferred.threadId || preferred._id,
+        strategy: 'crm_reply_token'
+      };
+    }
+  }
+
   let parent = await resolveByRfcHeaders(organizationId, inReplyTo, references);
   if (parent) {
     return { parent, threadId: parent.threadId || parent._id, strategy: 'rfc_headers' };

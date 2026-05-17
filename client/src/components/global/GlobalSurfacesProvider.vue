@@ -38,6 +38,8 @@
   <ConnectMailboxModal
     v-model="connectModalOpen"
     :reason="connectModalReason"
+    :mailbox-kind="connectModalMailboxKind"
+    :target-mailbox="connectModalTargetMailbox"
     @connected="onMailboxConnected"
   />
 </template>
@@ -68,7 +70,12 @@ import ConnectMailboxModal from '@/components/inbox/ConnectMailboxModal.vue';
 // ReferenceError: Cannot access 'G' before initialization inside defineComponent (TDZ / cycle).
 const GlobalSearch = defineAsyncComponent(() => import('@/components/GlobalSearch.vue'));
 
-const { connectModalOpen, connectModalReason } = useConnectMailboxPrompt();
+const {
+  connectModalOpen,
+  connectModalReason,
+  connectModalMailboxKind,
+  connectModalTargetMailbox
+} = useConnectMailboxPrompt();
 const { refreshMailboxes } = useMailboxConnection();
 
 function onMailboxConnected() {

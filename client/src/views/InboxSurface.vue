@@ -98,14 +98,23 @@
                 v-if="mb.emailAddress"
                 class="mt-0.5 block truncate text-[11px] text-gray-500 dark:text-gray-400"
               >{{ mb.emailAddress }}</span>
-              <span class="mt-0.5 block text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">{{ formatMailboxSyncStatus(mb.syncStatus) }}</span>
+              <span class="mt-0.5 block text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">{{ formatMailboxSyncStatus(mb) }}</span>
             </span>
             <span
               v-if="Number(mb.threadUnreadCount) > 0"
               class="mt-0.5 shrink-0 self-start rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-white dark:bg-blue-500"
             >{{ mb.threadUnreadCount }}</span>
             <button
-              v-if="mb.kind === 'group' && mailboxFlags.canCreateGroup"
+              v-if="mb.kind === 'group' && mailboxFlags.canCreateGroup && !mb.gmailInboxSync?.connected"
+              type="button"
+              class="mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase text-violet-700 hover:bg-violet-100 dark:text-violet-300 dark:hover:bg-violet-900/50"
+              title="Connect Gmail for this shared inbox"
+              @click.stop="openConnectGroupGmail(mb)"
+            >
+              Connect
+            </button>
+            <button
+              v-else-if="mb.kind === 'group' && mailboxFlags.canCreateGroup"
               type="button"
               class="mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase text-violet-700 hover:bg-violet-100 dark:text-violet-300 dark:hover:bg-violet-900/50"
               @click.stop="openMembersModal(mb)"
@@ -230,7 +239,7 @@
               Email &amp; inbound settings
             </RouterLink>
             <p class="text-[10px] leading-relaxed text-gray-500 dark:text-gray-500">
-              Full provider sync is planned; threads use record-linked mail and inbound config today.
+              Shared mailboxes: admins connect Gmail for support@ addresses. Personal mailboxes sync your own inbox.
             </p>
           </div>
         </div>
@@ -327,7 +336,23 @@
       </div>
 
       <div
-        v-if="selectedPersonalMailbox && !selectedPersonalMailbox.gmailInboxSync?.connected"
+        v-if="selectedMailbox && selectedMailbox.gmailSmtpOutbound?.connected && !selectedMailbox.gmailInboxSync?.connected"
+        class="border-b border-emerald-200 bg-emerald-50/90 px-3 py-2.5 text-xs text-emerald-950 dark:border-emerald-900/60 dark:bg-emerald-950/25 dark:text-emerald-100"
+      >
+        <div class="font-semibold text-emerald-900 dark:text-emerald-100">
+          Gmail SMTP send — {{ selectedMailbox.kind === 'group' ? 'Shared' : 'Personal' }}
+        </div>
+        <p class="mt-1 text-[11px] leading-snug text-emerald-800/90 dark:text-emerald-200/90">
+          Outbound email uses your Google App Password via the organization’s Gmail SMTP relay.
+          Connect <strong>Gmail (OAuth)</strong> to import and read mail in this inbox.
+        </p>
+        <div class="mt-1 text-[11px] text-emerald-800 dark:text-emerald-200">
+          Sending as <span class="font-mono">{{ selectedMailbox.emailAddress || '—' }}</span>
+        </div>
+      </div>
+
+      <div
+        v-if="selectedMailbox && !selectedMailbox.gmailInboxSync?.connected && !selectedMailbox.gmailSmtpOutbound?.connected"
         class="border-b border-gray-200 bg-gradient-to-b from-slate-50 to-white px-4 py-6 dark:border-gray-700 dark:from-gray-900 dark:to-gray-900/95 sm:px-6"
       >
         <h2 class="text-lg font-semibold text-gray-900 dark:text-white sm:text-xl">
@@ -393,23 +418,29 @@
       </div>
 
       <div
-        v-else-if="selectedPersonalMailbox"
+        v-else-if="selectedMailbox && selectedMailbox.gmailInboxSync?.connected"
         class="border-b border-violet-200 bg-violet-50/90 px-3 py-2.5 text-xs text-violet-950 dark:border-violet-900/60 dark:bg-violet-950/25 dark:text-violet-100"
       >
-        <div class="font-semibold text-violet-900 dark:text-violet-100">Gmail inbox sync</div>
+        <div class="font-semibold text-violet-900 dark:text-violet-100">
+          Gmail inbox sync — {{ selectedMailbox.kind === 'group' ? 'Shared' : 'Personal' }}
+        </div>
         <p class="mt-1 text-[11px] leading-snug text-violet-800/90 dark:text-violet-200/90">
-          Your personal mailbox is linked to Google. LiteDesk imports mail from the
-          <span class="font-medium">Gmail labels you choose</span>
-          (default: Inbox, Starred, Important) using a read-only scope. The server also syncs in the background; use Sync now for an immediate refresh.
+          <template v-if="selectedMailbox.kind === 'group'">
+            Shared mailbox linked to Google. Mail syncs on a schedule; use Sync now for an immediate pull.
+          </template>
+          <template v-else>
+            Personal mailbox linked to Google (Gmail labels you choose, read-only scope).
+          </template>
+          Background sync runs automatically.
         </p>
         <div class="mt-1 text-[11px] text-violet-800 dark:text-violet-200">
-          Connected as <span class="font-mono">{{ selectedPersonalMailbox.gmailInboxSync.accountEmail || '—' }}</span>
-          <span v-if="selectedPersonalMailbox.gmailInboxSync.lastSyncAt" class="ml-2 text-violet-700 dark:text-violet-300">
-            · Last sync {{ formatShortSyncTime(selectedPersonalMailbox.gmailInboxSync.lastSyncAt) }}
+          Connected as <span class="font-mono">{{ selectedMailbox.gmailInboxSync.accountEmail || '—' }}</span>
+          <span v-if="selectedMailbox.gmailInboxSync.lastSyncAt" class="ml-2 text-violet-700 dark:text-violet-300">
+            · Last sync {{ formatShortSyncTime(selectedMailbox.gmailInboxSync.lastSyncAt) }}
           </span>
         </div>
-        <p v-if="selectedPersonalMailbox.gmailInboxSync?.lastError" class="mt-1 text-[11px] text-amber-800 dark:text-amber-200">
-          {{ selectedPersonalMailbox.gmailInboxSync.lastError }}
+        <p v-if="selectedMailbox.gmailInboxSync?.lastError" class="mt-1 text-[11px] text-amber-800 dark:text-amber-200">
+          {{ selectedMailbox.gmailInboxSync.lastError }}
         </p>
         <div class="mt-2 flex flex-wrap gap-2">
           <button
@@ -807,6 +838,8 @@
       :standalone-mode="composeStandaloneMode"
       :related-to="composeRelatedTo"
       :initial-draft="composeInitialDraftForDrawer"
+      :sending-mailbox="composeSendingMailbox"
+      :sending-mailbox-hint="composeSendingMailboxHint"
       @close="closeComposeDrawer"
       @submit="submitCompose"
     />
@@ -929,6 +962,9 @@ import InboxGetStarted from '@/components/inbox/InboxGetStarted.vue';
 import GmailMailboxFolderModal from '@/components/inbox/GmailMailboxFolderModal.vue';
 import EmailThreadReader from '@/components/inbox/EmailThreadReader.vue';
 import { useConnectMailboxPrompt } from '@/composables/useConnectMailboxPrompt';
+import { isMailboxConnectedForProvider } from '@/constants/inboxProviders';
+import { createInboxStream } from '@/composables/useInboxStream';
+import { shouldPromptGmailReconnect, gmailReconnectMessage } from '@/utils/gmailConnectErrors';
 
 const router = useRouter();
 const route = useRoute();
@@ -985,11 +1021,18 @@ function displayNameForGmailLabelId(id) {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+const personalMailboxes = computed(() => mailboxes.value.filter((m) => m.kind === 'personal'));
+const groupMailboxes = computed(() => mailboxes.value.filter((m) => m.kind === 'group'));
+
+const selectedMailbox = computed(() => {
+  const id = selectedMailboxFilter.value;
+  if (!id) return null;
+  return mailboxes.value.find((x) => String(x.id) === String(id)) || null;
+});
+
 const gmailSidebarMailbox = computed(() => {
-  if (selectedPersonalMailbox.value) return selectedPersonalMailbox.value;
-  return (
-    mailboxes.value.find((x) => x.kind === 'personal' && x.gmailInboxSync?.connected) || null
-  );
+  if (selectedMailbox.value?.gmailInboxSync?.connected) return selectedMailbox.value;
+  return mailboxes.value.find((x) => x.gmailInboxSync?.connected) || null;
 });
 
 const gmailSidebarFolders = computed(() => {
@@ -1022,6 +1065,40 @@ const composeStandaloneMode = computed(() => {
 const composeRelatedTo = computed(() => {
   if (!composeRow.value || composeStandaloneMode.value) return null;
   return composeRow.value.relatedTo || null;
+});
+
+function mailboxSendMeta(mb) {
+  if (!mb) return null;
+  const viaApi = isMailboxConnectedForProvider(mb, 'google');
+  const viaSmtp = isMailboxConnectedForProvider(mb, 'google-smtp');
+  if (!viaApi && !viaSmtp) return null;
+  const emailAddress = String(mb.emailAddress || mb.gmailInboxSync?.accountEmail || '').trim();
+  if (!emailAddress) return null;
+  return { id: mb.id, label: mb.label, emailAddress, viaSmtp };
+}
+
+const composeSendingMailbox = computed(() => {
+  const replyMbId = composeRow.value?.mailboxId;
+  if (replyMbId) {
+    return mailboxSendMeta(mailboxes.value.find((x) => String(x.id) === String(replyMbId)));
+  }
+  if (selectedMailboxFilter.value) {
+    return mailboxSendMeta(selectedMailbox.value);
+  }
+  const findSendable = (list) =>
+    list.find(
+      (m) =>
+        isMailboxConnectedForProvider(m, 'google') || isMailboxConnectedForProvider(m, 'google-smtp')
+    );
+  const personal = findSendable(personalMailboxes.value);
+  if (personal) return mailboxSendMeta(personal);
+  const group = findSendable(groupMailboxes.value);
+  return mailboxSendMeta(group);
+});
+
+const composeSendingMailboxHint = computed(() => {
+  if (composeSendingMailbox.value) return '';
+  return 'Connect Gmail or Gmail SMTP in Inbox to send from your mailbox.';
 });
 
 const composeInitialDraftForDrawer = computed(() => {
@@ -1060,10 +1137,13 @@ const allVisibleSelected = computed(() => {
 });
 
 const selectedPersonalMailbox = computed(() => {
-  const id = selectedMailboxFilter.value;
-  if (!id) return null;
-  const m = mailboxes.value.find((x) => String(x.id) === String(id));
+  const m = selectedMailbox.value;
   return m && m.kind === 'personal' ? m : null;
+});
+
+const selectedGroupMailbox = computed(() => {
+  const m = selectedMailbox.value;
+  return m && m.kind === 'group' ? m : null;
 });
 
 /** Personal mailbox id for Gmail folder modal / OAuth when "All mail" scope is active. */
@@ -1193,7 +1273,7 @@ function selectMailboxFilter(mailboxId) {
   const mb = mailboxId
     ? mailboxes.value.find((x) => String(x.id) === String(mailboxId))
     : null;
-  if (mb?.kind === 'personal' && mb.gmailInboxSync?.connected) {
+  if (mb?.gmailInboxSync?.connected) {
     loadGmailLabelCatalog();
   } else {
     gmailLabelCatalog.value = [];
@@ -1249,8 +1329,14 @@ function formatShortSyncTime(value) {
   return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
+function openConnectGroupGmail(mb) {
+  if (!mb?.id) return;
+  selectMailboxFilter(mb.id);
+  promptConnectMailbox('inbox', { mailboxKind: 'group', targetMailbox: mb });
+}
+
 async function startGmailOAuth(loginHint = '') {
-  const mb = selectedPersonalMailbox.value;
+  const mb = selectedMailbox.value || mailboxes.value.find((m) => m.kind === 'personal');
   if (!mb?.id) return;
   gmailSyncLoading.value = true;
   try {
@@ -1324,7 +1410,7 @@ async function startGmailOAuth(loginHint = '') {
 }
 
 async function runGmailInboxSync() {
-  const mb = selectedPersonalMailbox.value;
+  const mb = selectedMailbox.value || gmailSidebarMailbox.value;
   if (!mb?.id) return;
   gmailSyncLoading.value = true;
   try {
@@ -1357,7 +1443,7 @@ async function onGmailFolderModalSaved() {
 }
 
 async function disconnectGmail() {
-  const mb = selectedPersonalMailbox.value;
+  const mb = selectedMailbox.value || gmailSidebarMailbox.value;
   if (!mb?.id) return;
   if (typeof window !== 'undefined' && !window.confirm('Disconnect Gmail from this mailbox?')) return;
   gmailSyncLoading.value = true;
@@ -1429,7 +1515,9 @@ function isWorkspaceThreadRow(row) {
 }
 
 function inboxHasConnectedMailbox() {
-  return mailboxes.value.some((m) => m.kind === 'personal' && m.gmailInboxSync?.connected);
+  return mailboxes.value.some(
+    (m) => m.gmailInboxSync?.connected || m.gmailSmtpOutbound?.connected
+  );
 }
 
 /** Full-page onboarding until a personal mailbox is linked (Gmail, etc.). */
@@ -1438,13 +1526,11 @@ const showInboxGetStarted = computed(
 );
 
 function onGetStartedGroupSetup() {
-  if (!inboxHasConnectedMailbox()) {
-    notifications.info('Connect your personal mailbox first, then you can add a group inbox.');
-    openConnectInboxModal();
+  if (!mailboxFlags.value.canCreateGroup) {
+    notifications.warning('Only admins can set up shared mailboxes.');
     return;
   }
-  showGroupMailboxForm.value = true;
-  notifications.info('Use the sidebar to create a group mailbox.');
+  promptConnectMailbox('inbox', { mailboxKind: 'group' });
 }
 
 function onGetStartedComingSoon() {
@@ -1691,6 +1777,15 @@ function clearEmailSearch() {
   fetchEmailThreads();
 }
 
+function openGmailReconnectForCompose() {
+  const mbId = composeRow.value?.mailboxId || selectedMailboxFilter.value;
+  const mb = mbId ? mailboxes.value.find((x) => String(x.id) === String(mbId)) : null;
+  promptConnectMailbox('send', {
+    mailboxKind: mb?.kind || 'personal',
+    targetMailbox: mb || undefined
+  });
+}
+
 async function submitCompose(payload) {
   try {
     const body = { ...payload };
@@ -1702,9 +1797,18 @@ async function submitCompose(payload) {
       closeComposeDrawer();
       await Promise.all([fetchEmailThreads(), fetchMailboxes(), fetchWorkspaceThreadCountsOnly({ silent: true })]);
     } else {
+      if (shouldPromptGmailReconnect(res)) {
+        openGmailReconnectForCompose();
+      }
       notifications.error(res?.message || 'Send failed');
     }
   } catch (err) {
+    const payload = err?.response?.data || err;
+    if (shouldPromptGmailReconnect(payload)) {
+      openGmailReconnectForCompose();
+      notifications.error(gmailReconnectMessage(payload));
+      return;
+    }
     notifications.error(err?.response?.data?.message || err?.message || 'Send failed');
   }
 }
@@ -1763,8 +1867,10 @@ async function saveMembersModal() {
   }
 }
 
-function formatMailboxSyncStatus(syncStatus) {
-  const s = String(syncStatus || 'not_configured');
+function formatMailboxSyncStatus(mb) {
+  if (mb?.gmailInboxSync?.connected) return 'gmail on';
+  if (mb?.gmailSmtpOutbound?.connected) return 'smtp send';
+  const s = String(mb?.syncStatus || 'not_configured');
   if (s === 'not_configured') return 'sync off';
   if (s === 'pending') return 'sync pending';
   if (s === 'connected') return 'sync on';
@@ -2124,6 +2230,28 @@ function emailRowClasses(row) {
 }
 
 let visibilityCountsTimer = null;
+let inboxStreamRefreshTimer = null;
+
+function shouldRefreshForInboxEvent(event) {
+  if (!event?.mailboxId) return true;
+  if (!selectedMailboxFilter.value) return true;
+  return String(event.mailboxId) === String(selectedMailboxFilter.value);
+}
+
+function scheduleInboxStreamRefresh(event) {
+  if (!shouldRefreshForInboxEvent(event)) return;
+  if (inboxStreamRefreshTimer) clearTimeout(inboxStreamRefreshTimer);
+  inboxStreamRefreshTimer = setTimeout(() => {
+    inboxStreamRefreshTimer = null;
+    void Promise.all([fetchEmailThreads(), fetchWorkspaceThreadCountsOnly({ silent: true })]);
+  }, 350);
+}
+
+const inboxStream = createInboxStream({
+  getToken: () => authStore.user?.token,
+  onInboxUpdated: (event) => scheduleInboxStreamRefresh(event)
+});
+
 function onDocumentVisibilityChange() {
   if (document.visibilityState !== 'visible') return;
   if (visibilityCountsTimer) clearTimeout(visibilityCountsTimer);
@@ -2156,6 +2284,7 @@ onMounted(async () => {
   }
   document.addEventListener('visibilitychange', onDocumentVisibilityChange);
   window.addEventListener('litedesk:mailbox-connected', onMailboxConnectedEvent);
+  inboxStream.connect();
 });
 
 function onMailboxConnectedEvent() {
@@ -2163,9 +2292,11 @@ function onMailboxConnectedEvent() {
 }
 
 onUnmounted(() => {
+  inboxStream.disconnect();
   document.removeEventListener('visibilitychange', onDocumentVisibilityChange);
   window.removeEventListener('litedesk:mailbox-connected', onMailboxConnectedEvent);
   if (visibilityCountsTimer) clearTimeout(visibilityCountsTimer);
+  if (inboxStreamRefreshTimer) clearTimeout(inboxStreamRefreshTimer);
   if (emailSearchDebounceTimer) clearTimeout(emailSearchDebounceTimer);
   cleanupGmailOAuthPopup();
 });

@@ -209,10 +209,16 @@
           >
             <h4 class="text-sm font-semibold text-gray-900 dark:text-white mb-2">Configuration</h4>
             <p v-if="selectedIntegration.configStatus === 'configured'" class="text-sm text-green-800 dark:text-green-300">
-              Email service is configured via environment (AWS SES, OCI Email Delivery, or SMTP). Notifications will be sent when this integration is enabled.
+              CRM outbound email is configured. Users who connect Gmail send as themselves; everyone else uses your provider below (default: Resend).
             </p>
             <p v-else class="text-sm text-amber-800 dark:text-amber-300">
-              Email service is not configured. Add AWS SES, OCI Email Delivery (SMTP), or other SMTP credentials to the server environment variables to send emails. See <code class="text-xs bg-gray-200 dark:bg-gray-700 px-1 rounded">.env.example</code> for required variables.
+              CRM outbound is not fully configured. Set a From Email and provider credentials below (Resend API key, OCI SMTP, AWS SES, or custom SMTP).
+            </p>
+            <p
+              v-if="selectedIntegration.emailPlatformDefaults?.notificationChannelNote"
+              class="mt-2 text-xs text-gray-600 dark:text-gray-400"
+            >
+              {{ selectedIntegration.emailPlatformDefaults.notificationChannelNote }}
             </p>
             <button
               v-if="selectedIntegration.configStatus === 'configured'"
@@ -227,9 +233,27 @@
 
           <div
             v-if="selectedIntegration.key === 'email-provider'"
+            class="rounded-lg p-4 border border-indigo-200 dark:border-indigo-800 bg-indigo-50/80 dark:bg-indigo-950/25"
+          >
+            <h4 class="text-sm font-semibold text-gray-900 dark:text-white">Tenant email settings (overview)</h4>
+            <ul class="mt-2 space-y-1.5 text-xs text-gray-700 dark:text-gray-300 list-disc pl-4">
+              <li><strong>CRM outbound</strong> — provider + From address (used when users have not connected Gmail).</li>
+              <li><strong>Send policy</strong> — modules, Inbox rules, suppression, mailbox-only mode.</li>
+              <li><strong>Gmail</strong> — OAuth app (optional) + user mailbox connections from Inbox.</li>
+              <li><strong>Inbound</strong> — webhook URL, diagnostics, suppressions (below).</li>
+            </ul>
+            <p class="mt-2 text-[11px] text-indigo-900/80 dark:text-indigo-200/90">
+              Notification emails use platform
+              <strong>{{ selectedIntegration.emailPlatformDefaults?.notificationProvider || 'oci-email-delivery' }}</strong>
+              (not the CRM provider below).
+            </p>
+          </div>
+
+          <div
+            v-if="selectedIntegration.key === 'email-provider'"
             class="rounded-lg p-4 border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40"
           >
-            <h4 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Email Provider Configuration</h4>
+            <h4 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">CRM outbound provider</h4>
             <p
               v-if="emailCriticalFieldsLocked"
               class="mb-3 text-xs text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2"
@@ -245,10 +269,36 @@
                 <select v-model="emailConfig.provider" :disabled="emailCriticalFieldsLocked" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed">
                   <option value="resend">resend</option>
                   <option value="smtp">smtp</option>
+                  <option value="gmail-smtp">gmail-smtp</option>
                   <option value="aws-ses">aws-ses</option>
                   <option value="oci-email-delivery">oci-email-delivery</option>
                 </select>
               </label>
+
+              <p
+                v-if="emailConfig.provider === 'resend'"
+                class="md:col-span-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-950 dark:border-violet-900 dark:bg-violet-950/30 dark:text-violet-100"
+              >
+                <strong>Resend (recommended)</strong> — default for CRM sends when users have not connected Gmail.
+                Use SMTP user <code class="font-mono text-[11px]">resend</code> and your Resend API key as the SMTP password.
+                Verify your sending domain in Resend and in the Sender Domain section below.
+              </p>
+
+              <p
+                v-if="emailConfig.provider === 'gmail-smtp'"
+                class="md:col-span-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-950 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-100"
+              >
+                <strong>Gmail SMTP</strong> sets the relay to <code class="font-mono text-[11px]">smtp.gmail.com:587</code>.
+                Each user connects their mailbox with a <strong>Google App Password</strong> under Inbox → Connect.
+                Inbox sync still uses Gmail API (OAuth) if you also connect “Gmail” separately.
+              </p>
+
+              <p
+                v-if="emailConfig.provider === 'smtp'"
+                class="md:col-span-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-800 dark:border-gray-600 dark:bg-gray-900/40 dark:text-gray-200"
+              >
+                <strong>Custom SMTP</strong> — any SMTP-compatible host (Mailgun, SendGrid SMTP, etc.).
+              </p>
 
               <label v-if="emailConfig.provider === 'oci-email-delivery'" class="text-sm md:col-span-2">
                 <span class="block mb-1 text-gray-700 dark:text-gray-300">
@@ -286,7 +336,14 @@
                 <input v-model="emailConfig.replyTo" type="email" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2" placeholder="support@yourdomain.com" />
               </label>
 
-              <label class="text-sm">
+              <p
+                v-if="emailConfig.provider === 'aws-ses'"
+                class="md:col-span-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100"
+              >
+                <strong>AWS SES</strong> sends via the SES API (SMTP fields below are optional). Verify your From domain in SES.
+              </p>
+
+              <label v-if="emailConfig.provider !== 'aws-ses'" class="text-sm">
                 <span class="block mb-1 text-gray-700 dark:text-gray-300">
                   SMTP Host
                   <span class="text-[10px] text-gray-500 dark:text-gray-400 ml-1">(owner-only)</span>
@@ -300,42 +357,88 @@
                 />
               </label>
 
-              <label class="text-sm">
-                <span class="block mb-1 text-gray-700 dark:text-gray-300">
-                  SMTP Port
-                  <span class="text-[10px] text-gray-500 dark:text-gray-400 ml-1">(owner-only)</span>
-                </span>
-                <input
-                  v-model="emailConfig.smtpPort"
-                  :disabled="emailCriticalFieldsLocked"
-                  type="number"
-                  class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                  :placeholder="emailConfig.provider === 'oci-email-delivery' ? '465' : '587'"
-                />
-              </label>
+              <template v-if="emailConfig.provider !== 'aws-ses'">
+                <label class="text-sm">
+                  <span class="block mb-1 text-gray-700 dark:text-gray-300">
+                    SMTP Port
+                    <span class="text-[10px] text-gray-500 dark:text-gray-400 ml-1">(owner-only)</span>
+                  </span>
+                  <input
+                    v-model="emailConfig.smtpPort"
+                    :disabled="emailCriticalFieldsLocked"
+                    type="number"
+                    class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                    :placeholder="emailConfig.provider === 'oci-email-delivery' ? '465' : '587'"
+                  >
+                </label>
 
-              <label class="text-sm">
-                <span class="block mb-1 text-gray-700 dark:text-gray-300">
-                  SMTP User
-                  <span class="text-[10px] text-gray-500 dark:text-gray-400 ml-1">(owner-only)</span>
-                </span>
-                <input
-                  v-model="emailConfig.smtpUser"
-                  :disabled="emailCriticalFieldsLocked"
-                  type="text"
-                  class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                  :placeholder="emailConfig.provider === 'oci-email-delivery' ? 'OCI SMTP username' : 'resend'"
-                />
-              </label>
+                <label class="text-sm">
+                  <span class="block mb-1 text-gray-700 dark:text-gray-300">
+                    SMTP User
+                    <span class="text-[10px] text-gray-500 dark:text-gray-400 ml-1">(owner-only)</span>
+                  </span>
+                  <input
+                    v-model="emailConfig.smtpUser"
+                    :disabled="emailCriticalFieldsLocked"
+                    type="text"
+                    class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                    :placeholder="emailConfig.provider === 'oci-email-delivery' ? 'OCI SMTP username' : 'resend'"
+                  >
+                </label>
 
-              <label class="text-sm">
-                <span class="block mb-1 text-gray-700 dark:text-gray-300">
-                  SMTP Password / API Key
-                  <span class="text-[10px] text-gray-500 dark:text-gray-400 ml-1">(owner-only)</span>
-                  <span v-if="emailConfig.hasSmtpPass" class="text-xs text-gray-500 dark:text-gray-400">({{ emailConfig.smtpPassMasked || 'saved' }})</span>
-                </span>
-                <input v-model="emailConfig.smtpPass" :disabled="emailCriticalFieldsLocked" type="password" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed" placeholder="Leave blank to keep existing secret" />
-              </label>
+                <label class="text-sm">
+                  <span class="block mb-1 text-gray-700 dark:text-gray-300">
+                    SMTP Password / API Key
+                    <span class="text-[10px] text-gray-500 dark:text-gray-400 ml-1">(owner-only)</span>
+                    <span v-if="emailConfig.hasSmtpPass" class="text-xs text-gray-500 dark:text-gray-400">({{ emailConfig.smtpPassMasked || 'saved' }})</span>
+                  </span>
+                  <input v-model="emailConfig.smtpPass" :disabled="emailCriticalFieldsLocked" type="password" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed" placeholder="Leave blank to keep existing secret">
+                </label>
+              </template>
+
+              <template v-if="emailConfig.provider === 'aws-ses'">
+                <label class="text-sm md:col-span-2">
+                  <span class="block mb-1 text-gray-700 dark:text-gray-300">
+                    AWS region
+                    <span class="text-[10px] text-gray-500 dark:text-gray-400 ml-1">(owner-only)</span>
+                  </span>
+                  <input
+                    v-model="emailConfig.awsRegion"
+                    :disabled="emailCriticalFieldsLocked"
+                    type="text"
+                    class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                    placeholder="us-east-1"
+                  >
+                </label>
+                <label class="text-sm">
+                  <span class="block mb-1 text-gray-700 dark:text-gray-300">
+                    AWS access key ID
+                    <span class="text-[10px] text-gray-500 dark:text-gray-400 ml-1">(owner-only)</span>
+                  </span>
+                  <input
+                    v-model="emailConfig.awsAccessKeyId"
+                    :disabled="emailCriticalFieldsLocked"
+                    type="text"
+                    autocomplete="off"
+                    class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 font-mono text-xs disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                </label>
+                <label class="text-sm">
+                  <span class="block mb-1 text-gray-700 dark:text-gray-300">
+                    AWS secret access key
+                    <span class="text-[10px] text-gray-500 dark:text-gray-400 ml-1">(owner-only)</span>
+                    <span v-if="emailConfig.hasAwsSecretAccessKey" class="text-xs text-gray-500 dark:text-gray-400">({{ emailConfig.awsSecretAccessKeyMasked || 'saved' }})</span>
+                  </span>
+                  <input
+                    v-model="emailConfig.awsSecretAccessKey"
+                    :disabled="emailCriticalFieldsLocked"
+                    type="password"
+                    autocomplete="new-password"
+                    class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                    placeholder="Leave blank to keep existing secret"
+                  >
+                </label>
+              </template>
             </div>
 
             <label class="mt-3 inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
@@ -414,7 +517,7 @@
             v-if="selectedIntegration.key === 'email-provider'"
             class="rounded-lg p-4 border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40"
           >
-            <h4 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Communication Policy</h4>
+            <h4 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Outbound send policy</h4>
             <p
               v-if="communicationPolicyLocked"
               class="mb-3 text-xs text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2"
@@ -441,6 +544,53 @@
                   :disabled="communicationPolicyLocked"
                 />
                 Allow Inbox standalone send (workspace-scoped mail without a person/deal record)
+              </label>
+
+              <div class="rounded-lg border border-gray-200 bg-white px-3 py-3 dark:border-gray-600 dark:bg-gray-900/40 space-y-2">
+                <p class="text-xs font-semibold text-gray-800 dark:text-gray-200">Mailbox vs platform send</p>
+                <label class="inline-flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+                  <input
+                    v-model="communicationPolicy.outboundEmail.disallowPlatformSmtpForWorkspace"
+                    type="checkbox"
+                    class="mt-0.5 rounded border-gray-300 dark:border-gray-600"
+                    :disabled="communicationPolicyLocked"
+                  />
+                  <span>
+                    <span class="font-medium">Inbox requires connected mailbox</span>
+                    <span class="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      Disallow Resend/platform SMTP for Inbox. Users must connect Gmail (OAuth or SMTP App Password).
+                    </span>
+                  </span>
+                </label>
+                <label class="inline-flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+                  <input
+                    v-model="communicationPolicy.outboundEmail.requireMailboxProviderForAgentSend"
+                    type="checkbox"
+                    class="mt-0.5 rounded border-gray-300 dark:border-gray-600"
+                    :disabled="communicationPolicyLocked"
+                  />
+                  <span>
+                    <span class="font-medium">All CRM sends require connected mailbox</span>
+                    <span class="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      Applies to people, deals, tasks, etc. — not only Inbox.
+                    </span>
+                  </span>
+                </label>
+              </div>
+
+              <label class="inline-flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+                <input
+                  v-model="communicationPolicy.outboundEmail.requireIdempotencyKey"
+                  type="checkbox"
+                  class="mt-0.5 rounded border-gray-300 dark:border-gray-600"
+                  :disabled="communicationPolicyLocked"
+                />
+                <span>
+                  <span class="font-medium">Require idempotency key on send API</span>
+                  <span class="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    Clients must send <code class="text-[10px]">Idempotency-Key</code> header to prevent duplicate sends.
+                  </span>
+                </span>
               </label>
 
               <label class="text-sm block">
@@ -501,7 +651,7 @@
             </div>
 
             <div class="mt-6 border-t border-gray-200 pt-4 dark:border-gray-600">
-              <h4 class="mb-2 text-sm font-semibold text-gray-900 dark:text-white">Gmail inbox sync</h4>
+              <h4 class="mb-2 text-sm font-semibold text-gray-900 dark:text-white">Gmail inbox &amp; user mailboxes</h4>
               <div
                 v-if="selectedIntegration.gmailOAuthAppConfigured"
                 class="rounded-lg border border-green-200 bg-green-50 px-3 py-2.5 text-xs text-green-900 dark:border-green-800 dark:bg-green-900/20 dark:text-green-100"
@@ -1123,7 +1273,12 @@ const emailConfig = ref({
   smtpPass: '',
   smtpSecure: false,
   smtpPassMasked: '',
-  hasSmtpPass: false
+  hasSmtpPass: false,
+  awsRegion: '',
+  awsAccessKeyId: '',
+  awsSecretAccessKey: '',
+  awsSecretAccessKeyMasked: '',
+  hasAwsSecretAccessKey: false
 });
 
 const buildOciSmtpHost = (region) => {
@@ -1141,6 +1296,29 @@ const isResendLikeSmtpConfig = (cfg) => {
   const host = String(cfg?.smtpHost || '').toLowerCase();
   const user = String(cfg?.smtpUser || '').toLowerCase();
   return host.includes('resend.com') || user === 'resend';
+};
+
+const applyResendDefaults = ({ providerJustChanged = false } = {}) => {
+  if (emailConfig.value.provider !== 'resend') return;
+  emailConfig.value.smtpHost = 'smtp.resend.com';
+  emailConfig.value.smtpPort = 587;
+  emailConfig.value.smtpUser = 'resend';
+  emailConfig.value.smtpSecure = false;
+  if (providerJustChanged) {
+    notifications.info('Resend selected — use your Resend API key as the SMTP password.');
+  }
+};
+
+const applyGmailSmtpDefaults = ({ providerJustChanged = false } = {}) => {
+  if (emailConfig.value.provider !== 'gmail-smtp') return;
+  emailConfig.value.smtpHost = 'smtp.gmail.com';
+  emailConfig.value.smtpPort = 587;
+  emailConfig.value.smtpSecure = false;
+  if (providerJustChanged) {
+    notifications.info(
+      'Gmail SMTP selected. Save settings, then users connect mailboxes with App Passwords in Inbox.'
+    );
+  }
 };
 
 const applyOciEmailDefaults = ({ providerJustChanged = false } = {}) => {
@@ -1174,6 +1352,9 @@ const communicationPolicy = ref({
     enabled: true,
     maxRecipientsPerMessage: 50,
     allowWorkspaceEmail: true,
+    disallowPlatformSmtpForWorkspace: false,
+    requireMailboxProviderForAgentSend: false,
+    requireIdempotencyKey: false,
     allowedModuleKeys: ['people', 'organizations', 'deals', 'tasks', 'cases', 'workspace'],
     suppression: {
       autoSuppressOnBounce: true,
@@ -1635,15 +1816,26 @@ const fetchIntegrationDetail = async (key, options = {}) => {
           smtpPass: '',
           smtpSecure: cfg.smtpSecure === true,
           smtpPassMasked: cfg.smtpPassMasked || '',
-          hasSmtpPass: cfg.hasSmtpPass === true
+          hasSmtpPass: cfg.hasSmtpPass === true,
+          awsRegion: cfg.awsRegion || '',
+          awsAccessKeyId: cfg.awsAccessKeyId || '',
+          awsSecretAccessKey: '',
+          awsSecretAccessKeyMasked: cfg.awsSecretAccessKeyMasked || '',
+          hasAwsSecretAccessKey: cfg.hasAwsSecretAccessKey === true
         };
         applyOciEmailDefaults();
+        applyResendDefaults();
         const policy = data.integration.communicationPolicy || {};
         communicationPolicy.value = {
           outboundEmail: {
             enabled: policy.outboundEmail?.enabled !== false,
             maxRecipientsPerMessage: Number(policy.outboundEmail?.maxRecipientsPerMessage) || 50,
             allowWorkspaceEmail: policy.outboundEmail?.allowWorkspaceEmail !== false,
+            disallowPlatformSmtpForWorkspace:
+              policy.outboundEmail?.disallowPlatformSmtpForWorkspace === true,
+            requireMailboxProviderForAgentSend:
+              policy.outboundEmail?.requireMailboxProviderForAgentSend === true,
+            requireIdempotencyKey: policy.outboundEmail?.requireIdempotencyKey === true,
             allowedModuleKeys: Array.isArray(policy.outboundEmail?.allowedModuleKeys) && policy.outboundEmail.allowedModuleKeys.length > 0
               ? policy.outboundEmail.allowedModuleKeys
               : ['people', 'organizations', 'deals', 'tasks', 'cases', 'workspace'],
@@ -1699,6 +1891,11 @@ const saveEmailConfig = async (includeGmailOAuthApp = false) => {
         enabled: communicationPolicy.value.outboundEmail.enabled !== false,
         maxRecipientsPerMessage: Number(communicationPolicy.value.outboundEmail.maxRecipientsPerMessage) || 50,
         allowWorkspaceEmail: communicationPolicy.value.outboundEmail.allowWorkspaceEmail !== false,
+        disallowPlatformSmtpForWorkspace:
+          communicationPolicy.value.outboundEmail.disallowPlatformSmtpForWorkspace === true,
+        requireMailboxProviderForAgentSend:
+          communicationPolicy.value.outboundEmail.requireMailboxProviderForAgentSend === true,
+        requireIdempotencyKey: communicationPolicy.value.outboundEmail.requireIdempotencyKey === true,
         allowedModuleKeys: communicationPolicy.value.outboundEmail.allowedModuleKeys,
         suppression: {
           autoSuppressOnBounce: communicationPolicy.value.outboundEmail.suppression?.autoSuppressOnBounce !== false,
@@ -1727,6 +1924,9 @@ const saveEmailConfig = async (includeGmailOAuthApp = false) => {
       smtpUser: emailConfig.value.smtpUser,
       smtpPass: emailConfig.value.smtpPass,
       smtpSecure: !!emailConfig.value.smtpSecure,
+      awsRegion: emailConfig.value.awsRegion,
+      awsAccessKeyId: emailConfig.value.awsAccessKeyId,
+      awsSecretAccessKey: emailConfig.value.awsSecretAccessKey,
       communicationPolicy: communicationPolicyPayload
     };
 
@@ -1740,6 +1940,7 @@ const saveEmailConfig = async (includeGmailOAuthApp = false) => {
         includeGmailOAuthApp ? 'Custom Gmail OAuth app saved' : 'Email provider settings saved'
       );
       emailConfig.value.smtpPass = '';
+      emailConfig.value.awsSecretAccessKey = '';
       communicationPolicy.value.gmailInboxSync.clientSecret = '';
       await fetchIntegrationDetail('email-provider');
       await fetchIntegrations();
@@ -1848,7 +2049,9 @@ watch(inboundIncludeResolved, () => {
 watch(
   () => emailConfig.value.provider,
   (next, prev) => {
+    applyResendDefaults({ providerJustChanged: next === 'resend' && prev !== 'resend' });
     applyOciEmailDefaults({ providerJustChanged: next === 'oci-email-delivery' && prev !== 'oci-email-delivery' });
+    applyGmailSmtpDefaults({ providerJustChanged: next === 'gmail-smtp' && prev !== 'gmail-smtp' });
   }
 );
 

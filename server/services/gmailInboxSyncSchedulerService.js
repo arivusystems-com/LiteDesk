@@ -58,7 +58,7 @@ async function tickScheduledGmailInboxSync() {
         { organizationId: tenant._id, connection: conn, databaseName: dbName },
         async () => {
           const mailboxes = await Mailbox.find({
-            kind: 'personal',
+            kind: { $in: ['personal', 'group'] },
             inboxProvider: 'google',
             inboxSyncEncryptedRefreshToken: { $exists: true, $nin: [null, ''] }
           })

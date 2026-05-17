@@ -19,6 +19,7 @@
  */
 
 const crypto = require('crypto');
+const replyToTokenService = require('../services/replyToTokenService');
 const inboundEmailQueueService = require('../services/inboundEmailQueueService');
 const inboundProcessingQueue = require('../platform/communication/queues/inboundProcessingQueue');
 const { appendCommunicationEvent } = require('../services/communicationEventWriter');
@@ -67,6 +68,47 @@ function extractRawMimeBuffer(req) {
   }
   return null;
 }
+
+/**
+ * GET /api/webhooks/email/inbound/health — R0 routing readiness (no auth).
+ */
+exports.inboundHealth = async (_req, res) => {
+  const replyDomain =
+    String(process.env.EMAIL_REPLY_TO_DOMAIN || process.env.BASE_DOMAIN || '').trim() ||
+    (String(process.env.EMAIL_INBOUND_ADDRESS || '').includes('@')
+      ? String(process.env.EMAIL_INBOUND_ADDRESS).split('@')[1]
+      : '');
+
+  const sampleToken = process.env.EMAIL_REPLY_TOKEN_SECRET
+    ? (() => {
+        try {
+          return replyToTokenService.buildReplyToAddress({
+            orgId: '000000000000000000000000',
+            moduleKey: 'workspace',
+            recordId: '000000000000000000000000'
+          });
+        } catch {
+          return null;
+        }
+      })()
+    : null;
+
+  return res.json({
+    success: true,
+    data: {
+      inboundWebhookPath: '/api/webhooks/email/inbound',
+      webhookSecretConfigured: Boolean(String(process.env.EMAIL_INBOUND_WEBHOOK_SECRET || '').trim()),
+      replyTokenSecretConfigured: Boolean(String(process.env.EMAIL_REPLY_TOKEN_SECRET || '').trim()),
+      replyToDomain: replyDomain || null,
+      inboundCatchAllAddress: String(process.env.EMAIL_INBOUND_ADDRESS || '').trim() || null,
+      requireReplyToken:
+        String(process.env.EMAIL_INBOUND_REQUIRE_REPLY_TOKEN || '').trim().toLowerCase() === 'true',
+      queueAvailable: inboundProcessingQueue.isQueueAvailable(),
+      supportedLocalParts: ['replies+', 'reply+'],
+      sampleReplyToFormat: sampleToken ? `${sampleToken.split('@')[0]}@${sampleToken.split('@')[1]}` : null
+    }
+  });
+};
 
 /**
  * POST /api/webhooks/email/inbound

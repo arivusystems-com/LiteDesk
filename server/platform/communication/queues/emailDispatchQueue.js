@@ -1,7 +1,7 @@
 const emailQueueService = require('../../../services/emailQueueService');
 
-function enqueueCommunicationSend(communicationId) {
-  return emailQueueService.enqueueSend(communicationId);
+function enqueueCommunicationSend(communicationId, organizationId) {
+  return emailQueueService.enqueueSend(communicationId, organizationId);
 }
 
 function isQueueAvailable() {

@@ -4,10 +4,16 @@ const { protect } = require('../middleware/authMiddleware');
 const { organizationIsolation } = require('../middleware/organizationMiddleware');
 const { uploadSingle } = require('../middleware/uploadMiddleware');
 const controller = require('../controllers/communicationsController');
+const { streamInbox } = require('../controllers/inboxStreamController');
+
+// SSE — auth via query token (EventSource cannot send Authorization header)
+router.get('/inbox/stream', streamInbox);
 
 router.use(protect);
 router.use(organizationIsolation);
 
+router.get('/email/compose-preview', controller.previewComposeEmail);
+router.get('/email/reply-to-preview', controller.previewReplyTo);
 router.post('/email', controller.sendEmail);
 router.get('/pipeline-metrics', controller.getPipelineMetrics);
 router.get('/pipeline-diagnostics', controller.getPipelineDiagnostics);

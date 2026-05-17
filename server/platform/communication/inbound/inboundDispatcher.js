@@ -80,14 +80,44 @@ async function autoCreatePersonForSender({ organizationId, parsedMessage }) {
 }
 
 async function resolveTenantContext({ parsedMessage, headerOrganizationId }) {
-  const tokenPayload = replyToTokenService.extractFromAddresses(parsedMessage.allRecipients);
-  const orgId = tokenPayload?.orgId || headerOrganizationId || null;
+  const extracted = replyToTokenService.extractFromAddresses(parsedMessage.allRecipients);
+  const requireToken =
+    String(process.env.EMAIL_INBOUND_REQUIRE_REPLY_TOKEN || '').trim().toLowerCase() === 'true';
+
+  if (requireToken && !extracted) {
+    throw new InboundDispatchError(
+      'Inbound email must include a valid reply+ or replies+ routing token (central catch-all mode)',
+      { stage: 'route' }
+    );
+  }
+
+  let tokenPayload = extracted;
+  let registryRoute = null;
+
+  if (extracted?.tokenType === 'short' && extracted.crmThreadToken) {
+    const { resolveByCrmThreadToken } = require('../../../services/emailThreadRegistryService');
+    registryRoute = await resolveByCrmThreadToken(extracted.crmThreadToken);
+    if (!registryRoute) {
+      throw new InboundDispatchError('Unknown CRM reply thread token', { stage: 'route' });
+    }
+    tokenPayload = registryRoute;
+  }
+
+  const orgId = tokenPayload?.orgId || tokenPayload?.tenantId || headerOrganizationId || null;
   const moduleKey = tokenPayload?.moduleKey || (orgId ? 'cases' : null);
   const recordId = tokenPayload?.recordId || null;
   if (!orgId) {
     throw new InboundDispatchError('No valid Reply-To token or organization header found', { stage: 'route' });
   }
-  return { orgId, moduleKey, recordId, tokenPayload };
+  return {
+    orgId,
+    moduleKey,
+    recordId,
+    tokenPayload,
+    registryRoute,
+    mailboxIdFromToken: registryRoute?.mailboxId || null,
+    conversationIdFromToken: registryRoute?.conversationId || null
+  };
 }
 
 async function resolveTargetRecord({ orgId, moduleKey, recordId, parsedMessage }) {
@@ -240,6 +270,8 @@ async function processRawInbound({
   let orgId;
   let relatedTo;
   let helpdeskCaseResult;
+  let conversationIdFromToken = null;
+  let mailboxIdFromToken = null;
 
   if (forcedWorkspaceInbox && forcedWorkspaceInbox.organizationId) {
     orgId = forcedWorkspaceInbox.organizationId;
@@ -257,15 +289,17 @@ async function processRawInbound({
     relatedTo = { moduleKey: 'workspace', recordId: oid };
     helpdeskCaseResult = null;
   } else {
-    const { orgId: resolvedOrg, moduleKey, recordId } = await resolveTenantContext({
+    const tenantCtx = await resolveTenantContext({
       parsedMessage,
       headerOrganizationId
     });
-    orgId = resolvedOrg;
+    orgId = tenantCtx.orgId;
+    conversationIdFromToken = tenantCtx.conversationIdFromToken || null;
+    mailboxIdFromToken = tenantCtx.mailboxIdFromToken || null;
     const resolved = await resolveTargetRecord({
       orgId,
-      moduleKey,
-      recordId,
+      moduleKey: tenantCtx.moduleKey,
+      recordId: tenantCtx.recordId,
       parsedMessage
     });
     relatedTo = resolved.relatedTo;
@@ -294,7 +328,8 @@ async function processRawInbound({
     references: parsedMessage.references,
     relatedTo,
     fromAddress: parsedMessage.fromAddress,
-    subject: parsedMessage.subject
+    subject: parsedMessage.subject,
+    preferredThreadId: conversationIdFromToken || null
   });
 
   const normalizedReply = normalizeReplyBody({
@@ -356,6 +391,10 @@ async function processRawInbound({
       relatedTo,
       mailboxId: mailboxIdInbound || null,
       providerMessageKey: providerMessageKey || null,
+      providerThreadId:
+        forcedWorkspaceInbox?.providerThreadId
+          ? String(forcedWorkspaceInbox.providerThreadId).trim().slice(0, 128)
+          : null,
       gmailLabelIds: Array.isArray(forcedWorkspaceInbox?.gmailLabelIds)
         ? forcedWorkspaceInbox.gmailLabelIds
           .map((x) => String(x).trim())
@@ -410,6 +449,19 @@ async function processRawInbound({
       })
     }
   });
+
+  if (relatedTo?.moduleKey === 'workspace' || mailboxIdInbound) {
+    const { emitInboxUpdated } = require('../../../services/inboxRealtimeService');
+    void emitInboxUpdated({
+      organizationId: orgId,
+      mailboxId: mailboxIdInbound,
+      reason: 'inbound',
+      meta: {
+        communicationId: String(doc._id),
+        threadId: String(doc.threadId || doc._id)
+      }
+    });
+  }
 
   return {
     communicationId: doc._id,

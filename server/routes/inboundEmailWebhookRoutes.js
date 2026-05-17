@@ -20,9 +20,12 @@ const router = express.Router();
 const inboundController = require('../controllers/inboundEmailController');
 const sesWebhookController = require('../controllers/sesWebhookController');
 const emailEventWebhookController = require('../controllers/emailEventWebhookController');
+const gmailPushWebhookController = require('../controllers/gmailPushWebhookController');
 
 // For message/rfc822: parse raw body. For application/json: body already parsed by app-level middleware
 const rawParser = express.raw({ type: ['message/rfc822', 'text/plain'], limit: '10mb' });
+
+router.get('/inbound/health', inboundController.inboundHealth);
 
 router.post('/inbound', (req, res, next) => {
   const ct = (req.headers['content-type'] || '').toLowerCase();
@@ -34,5 +37,9 @@ router.post('/inbound', (req, res, next) => {
 
 router.post('/ses-events', sesWebhookController.handleSesEvents);
 router.post('/events', emailEventWebhookController.handleProviderEvents);
+
+// Gmail Pub/Sub push (R3.1) — no JWT; optional GMAIL_PUSH_WEBHOOK_SECRET
+router.get('/gmail/push', gmailPushWebhookController.verifyGmailPushSubscription);
+router.post('/gmail/push', gmailPushWebhookController.handleGmailPush);
 
 module.exports = router;

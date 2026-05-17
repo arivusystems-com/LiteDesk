@@ -127,8 +127,40 @@
             </p>
           </template>
 
-          <!-- Create personal mailbox -->
+          <!-- Create mailbox -->
           <template v-else-if="view === 'create-mailbox'">
+            <div v-if="mailboxKind === 'group'" class="space-y-3">
+              <p class="text-sm text-gray-700 dark:text-gray-300">
+                Create a <span class="font-medium">shared team mailbox</span>, then connect Google Workspace / Gmail.
+              </p>
+              <label class="block text-sm font-medium text-gray-800 dark:text-gray-200">
+                Display name
+                <input
+                  v-model="groupLabel"
+                  type="text"
+                  class="mt-1.5 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-950 dark:text-white"
+                  placeholder="Support"
+                >
+              </label>
+              <label class="block text-sm font-medium text-gray-800 dark:text-gray-200">
+                Shared email address
+                <input
+                  v-model="groupEmail"
+                  type="email"
+                  class="mt-1.5 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-950 dark:text-white"
+                  placeholder="support@company.com"
+                >
+              </label>
+              <button
+                type="button"
+                class="w-full rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
+                :disabled="setupLoading || !flags.canCreateGroup || !groupLabel.trim()"
+                @click="createGroupMailbox"
+              >
+                {{ setupLoading ? 'Creating…' : 'Create shared mailbox' }}
+              </button>
+            </div>
+            <template v-else>
             <div class="rounded-xl border border-blue-100 bg-blue-50/80 px-4 py-3 text-sm text-blue-950 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-100">
               <p class="font-medium">One quick step first</p>
               <p class="mt-1 text-xs leading-relaxed text-blue-900/90 dark:text-blue-200/90">
@@ -147,6 +179,44 @@
             <p v-if="!flags.canCreatePersonal" class="mt-3 text-center text-xs text-gray-500 dark:text-gray-400">
               Your role cannot create a personal mailbox. Ask an administrator.
             </p>
+            </template>
+          </template>
+
+          <!-- Gmail SMTP (App Password) -->
+          <template v-else-if="view === 'connect-provider' && selectedProviderId === 'google-smtp'">
+            <p
+              v-if="!flags.gmailSmtpOrgConfigured"
+              class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100"
+            >
+              Your organization has not enabled Gmail SMTP yet. An admin must choose
+              <span class="font-medium">gmail-smtp</span> under Settings → Integrations → Email and save.
+            </p>
+            <template v-else>
+              <label class="block text-sm font-medium text-gray-800 dark:text-gray-200">
+                Gmail address
+                <input
+                  v-model="emailHint"
+                  type="email"
+                  autocomplete="email"
+                  class="mt-1.5 w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm dark:border-gray-600 dark:bg-gray-950 dark:text-white"
+                  placeholder="you@company.com"
+                >
+              </label>
+              <label class="block mt-4 text-sm font-medium text-gray-800 dark:text-gray-200">
+                Google App Password
+                <input
+                  v-model="appPassword"
+                  type="password"
+                  autocomplete="off"
+                  class="mt-1.5 w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm dark:border-gray-600 dark:bg-gray-950 dark:text-white"
+                  placeholder="16-character app password"
+                >
+              </label>
+              <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                Create one at Google Account → Security → 2-Step Verification → App passwords.
+                This is used only to send mail as you; inbox sync uses Gmail API (OAuth) if you connect Gmail separately.
+              </p>
+            </template>
           </template>
 
           <!-- Gmail / Google connect -->
@@ -224,6 +294,15 @@
               Done
             </button>
             <button
+              v-else-if="view === 'connect-provider' && selectedProviderId === 'google-smtp' && flags.gmailSmtpOrgConfigured"
+              type="button"
+              class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
+              :disabled="smtpConnectLoading || !emailLooksValid || !appPassword.trim()"
+              @click="connectGmailSmtp"
+            >
+              {{ smtpConnectLoading ? 'Verifying…' : 'Connect Gmail SMTP' }}
+            </button>
+            <button
               v-else-if="view === 'connect-provider' && selectedProviderId === 'google' && gmailOAuthReady"
               type="button"
               class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
@@ -250,12 +329,17 @@ import { useAuthStore } from '@/stores/authRegistry';
 import { useNotifications } from '@/composables/useNotifications';
 import { useMailboxConnection } from '@/composables/useMailboxConnection';
 import { useGmailInboxConnect } from '@/composables/useGmailInboxConnect';
+import apiClient from '@/utils/apiClient';
 import { INBOX_PROVIDERS, getInboxProvider } from '@/constants/inboxProviders';
 import InboxProviderCard from '@/components/inbox/InboxProviderCard.vue';
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
-  reason: { type: String, default: 'send' }
+  reason: { type: String, default: 'send' },
+  /** `personal` | `group` — shared mailbox uses admin OAuth (R1). */
+  mailboxKind: { type: String, default: 'personal' },
+  /** When set (group), connect Gmail to this mailbox instead of creating one. */
+  targetMailbox: { type: Object, default: null }
 });
 
 const emit = defineEmits(['update:modelValue', 'connected']);
@@ -265,11 +349,16 @@ const notifications = useNotifications();
 const {
   flags,
   personalMailbox,
+  groupMailboxes,
   hasConnectedInbox,
   gmailOAuthReady,
   refreshMailboxes,
-  ensurePersonalMailbox
+  ensurePersonalMailbox,
+  ensureGroupMailbox
 } = useMailboxConnection();
+
+/** Mailbox id used for OAuth after create-group step */
+const connectTargetMailbox = ref(null);
 const { gmailSyncLoading, startGmailOAuth } = useGmailInboxConnect();
 
 /** @type {import('vue').Ref<'providers' | 'create-mailbox' | 'connect-provider'>} */
@@ -277,6 +366,10 @@ const view = ref('providers');
 const selectedProviderId = ref('google');
 const setupLoading = ref(false);
 const emailHint = ref('');
+const groupLabel = ref('Support');
+const groupEmail = ref('');
+const appPassword = ref('');
+const smtpConnectLoading = ref(false);
 
 const inboxProviders = INBOX_PROVIDERS;
 
@@ -292,6 +385,11 @@ const modalPanelClass = computed(() =>
 );
 
 const headerTitle = computed(() => {
+  if (props.mailboxKind === 'group') {
+    if (view.value === 'providers') return 'Connect shared mailbox';
+    if (view.value === 'create-mailbox') return 'Create shared inbox';
+    return 'Connect Gmail for team';
+  }
   if (view.value === 'providers' && props.reason === 'inbox') {
     return 'Connect your Inbox to LiteDesk';
   }
@@ -314,6 +412,9 @@ const headerSubtitle = computed(() => {
   if (selectedProvider.value?.id === 'google') {
     return 'Authorize Google to sync Gmail via OAuth (read-only import + CRM send).';
   }
+  if (selectedProvider.value?.id === 'google-smtp') {
+    return 'Send email through your organization’s Gmail SMTP relay using an App Password.';
+  }
   return selectedProvider.value?.integrationLabel || '';
 });
 
@@ -332,6 +433,9 @@ function providerForCard(p) {
   if (p.id === 'google' && !gmailOAuthReady.value) {
     return { ...p, status: 'disabled' };
   }
+  if (p.id === 'google-smtp' && !flags.value.gmailSmtpOrgConfigured) {
+    return { ...p, status: 'disabled' };
+  }
   return p;
 }
 
@@ -339,10 +443,12 @@ watch(
   () => props.modelValue,
   (open) => {
     if (open) {
-      view.value = 'providers';
+      view.value = props.targetMailbox?.id ? 'connect-provider' : 'providers';
       selectedProviderId.value = 'google';
-      emailHint.value =
-        authStore.user?.email && String(authStore.user.email).includes('@')
+      connectTargetMailbox.value = props.targetMailbox || null;
+      emailHint.value = props.targetMailbox?.emailAddress
+        ? String(props.targetMailbox.emailAddress).trim()
+        : authStore.user?.email && String(authStore.user.email).includes('@')
           ? String(authStore.user.email).trim()
           : '';
       void refreshMailboxes();
@@ -352,6 +458,7 @@ watch(
 
 function close() {
   view.value = 'providers';
+  appPassword.value = '';
   emit('update:modelValue', false);
 }
 
@@ -377,7 +484,19 @@ function onProviderSelect(providerId) {
     notifications.warning('Gmail is not configured on this server yet.');
     return;
   }
+  if (providerId === 'google-smtp' && !flags.value.gmailSmtpOrgConfigured) {
+    notifications.warning('Gmail SMTP is not enabled for this organization. Ask an admin to configure it in Settings.');
+    return;
+  }
   selectedProviderId.value = providerId;
+  if (props.mailboxKind === 'group') {
+    if (props.targetMailbox?.id || connectTargetMailbox.value?.id) {
+      view.value = 'connect-provider';
+      return;
+    }
+    view.value = 'create-mailbox';
+    return;
+  }
   if (!personalMailbox.value) {
     view.value = 'create-mailbox';
     return;
@@ -400,15 +519,70 @@ async function createPersonalMailbox() {
   }
 }
 
+async function createGroupMailbox() {
+  setupLoading.value = true;
+  try {
+    const mb = await ensureGroupMailbox({
+      label: groupLabel.value,
+      emailAddress: groupEmail.value
+    });
+    if (mb?.id) {
+      connectTargetMailbox.value = mb;
+      emailHint.value = String(groupEmail.value || mb.emailAddress || '').trim();
+      notifications.success('Shared mailbox created');
+      view.value = 'connect-provider';
+    } else {
+      notifications.error('Could not create shared mailbox');
+    }
+  } finally {
+    setupLoading.value = false;
+  }
+}
+
+function resolveConnectMailboxId() {
+  if (props.targetMailbox?.id) return String(props.targetMailbox.id);
+  if (connectTargetMailbox.value?.id) return String(connectTargetMailbox.value.id);
+  if (props.mailboxKind === 'group') {
+    const g = groupMailboxes.value.find((m) => m.id && !m.gmailInboxSync?.connected);
+    return g?.id ? String(g.id) : '';
+  }
+  return personalMailbox.value?.id ? String(personalMailbox.value.id) : '';
+}
+
 async function connectGoogle() {
-  const mb = personalMailbox.value;
-  if (!mb?.id || !emailLooksValid.value) return;
-  await startGmailOAuth(mb.id, emailHint.value, {
+  const mbId = resolveConnectMailboxId();
+  if (!mbId || !emailLooksValid.value) return;
+  await startGmailOAuth(mbId, emailHint.value, {
     onConnected: async () => {
       await refreshMailboxes();
       emit('connected');
       close();
     }
   });
+}
+
+async function connectGmailSmtp() {
+  const mbId = resolveConnectMailboxId();
+  if (!mbId || !emailLooksValid.value || !appPassword.value.trim()) return;
+  smtpConnectLoading.value = true;
+  try {
+    const res = await apiClient.post(`/mailboxes/${encodeURIComponent(mbId)}/outbound/gmail-smtp/connect`, {
+      emailAddress: emailHint.value.trim(),
+      appPassword: appPassword.value.replace(/\s/g, '')
+    });
+    if (res?.success) {
+      notifications.success('Gmail SMTP connected for sending');
+      appPassword.value = '';
+      await refreshMailboxes();
+      emit('connected');
+      close();
+    } else {
+      notifications.error(res?.message || 'Could not connect Gmail SMTP');
+    }
+  } catch (err) {
+    notifications.error(err?.response?.data?.message || err?.message || 'Could not connect Gmail SMTP');
+  } finally {
+    smtpConnectLoading.value = false;
+  }
 }
 </script>
