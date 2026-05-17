@@ -26,6 +26,7 @@ const { uploadsDir } = require('../../../middleware/uploadMiddleware');
 const { MAX_ATTACHMENT_SIZE_BYTES } = require('../../../models/Communication');
 const { appendCommunicationEvent } = require('../../../services/communicationEventWriter');
 const { resolveMailboxIdForInbound } = require('../../../services/mailboxRoutingService');
+const { runWithOrganizationTenantContext } = require('../../../utils/runWithOrganizationTenant');
 
 const { parseRawMime } = require('./inboundParser');
 const { resolveThread } = require('./threadResolver');
@@ -272,6 +273,8 @@ async function processRawInbound({
   let helpdeskCaseResult;
   let conversationIdFromToken = null;
   let mailboxIdFromToken = null;
+  let routeModuleKey = null;
+  let routeRecordId = null;
 
   if (forcedWorkspaceInbox && forcedWorkspaceInbox.organizationId) {
     orgId = forcedWorkspaceInbox.organizationId;
@@ -296,10 +299,16 @@ async function processRawInbound({
     orgId = tenantCtx.orgId;
     conversationIdFromToken = tenantCtx.conversationIdFromToken || null;
     mailboxIdFromToken = tenantCtx.mailboxIdFromToken || null;
+    routeModuleKey = tenantCtx.moduleKey;
+    routeRecordId = tenantCtx.recordId;
+  }
+
+  return runWithOrganizationTenantContext(orgId, async () => {
+  if (!relatedTo) {
     const resolved = await resolveTargetRecord({
       orgId,
-      moduleKey: tenantCtx.moduleKey,
-      recordId: tenantCtx.recordId,
+      moduleKey: routeModuleKey,
+      recordId: routeRecordId,
       parsedMessage
     });
     relatedTo = resolved.relatedTo;
@@ -474,6 +483,7 @@ async function processRawInbound({
       ? { caseId: helpdeskCaseResult.caseRecord._id, action: helpdeskCaseResult.action }
       : null
   };
+  });
 }
 
 module.exports = {

@@ -100,8 +100,9 @@ function processInboxToArivu() {
   }
 
   const processedLabelId = getOrCreateLabelId_(labelName);
+  const skippedLabelId = getOrCreateLabelId_(labelName + '-skipped');
   const list = Gmail.Users.Threads.list('me', {
-    q: 'in:inbox -label:' + labelName,
+    q: 'in:inbox -label:' + labelName + ' -label:' + labelName + '-skipped',
     maxResults: 20
   });
   const threads = list.threads || [];
@@ -113,6 +114,14 @@ function processInboxToArivu() {
 
     // One webhook per thread (latest message only)
     const messageId = messages[messages.length - 1].id;
+
+    if (!messageHasRoutingToken_(messageId)) {
+      messages.forEach(function (m) {
+        Gmail.Users.Messages.modify('me', m.id, { addLabelIds: [skippedLabelId] });
+      });
+      console.log('Skipped (no reply+ token)', messageId);
+      return;
+    }
 
     try {
       const rawB64 = Gmail.Users.Messages.get('me', messageId, { format: 'raw' }).raw;
@@ -140,6 +149,17 @@ function processInboxToArivu() {
       console.error('Thread failed', t.id, e);
     }
   });
+}
+
+/** True when To/Cc/Delivered-To (etc.) contains reply+token@ or replies+… */
+function messageHasRoutingToken_(messageId) {
+  const msg = Gmail.Users.Messages.get('me', messageId, { format: 'metadata' });
+  const headers = (msg.payload && msg.payload.headers) || [];
+  const re = /(?:reply|replies)\+[a-z0-9]{6,16}@/i;
+  for (var i = 0; i < headers.length; i++) {
+    if (re.test(String(headers[i].value || ''))) return true;
+  }
+  return false;
 }
 
 /** Gmail API `raw` is base64url → standard base64 for Arivu webhook JSON body. */
