@@ -92,8 +92,15 @@ function normalizeReplyBody({ html, text }) {
   const textResult = stripTextQuotedSection(originalText);
   const sigResult = stripSignature(textResult.stripped || originalText);
 
-  const displayBody = htmlResult.stripped || sigResult.stripped || textResult.stripped || originalBody;
-  const displayPlainText = (sigResult.stripped || textResult.stripped || '').trim() || (originalText || '').trim();
+  let displayBody = htmlResult.stripped || sigResult.stripped || textResult.stripped || originalBody;
+  // Do not replace real content with empty string when quote/signature heuristics over-strip.
+  if (!String(displayBody || '').trim() && String(originalBody || '').trim()) {
+    displayBody = originalBody;
+  }
+  let displayPlainText = (sigResult.stripped || textResult.stripped || '').trim() || (originalText || '').trim();
+  if (!displayPlainText && String(originalText || '').trim()) {
+    displayPlainText = originalText.trim();
+  }
 
   return {
     displayBody,
