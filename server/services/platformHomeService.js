@@ -11,6 +11,18 @@ const { buildFocusLine, buildGreetingPayload } = require('./platformHomeFocusSer
 const ATTENTION_PREVIEW_LIMIT = 7;
 const RESUME_LIMIT = 5;
 
+async function safePlatformHomeSection(label, fn, fallback) {
+  try {
+    return await fn();
+  } catch (err) {
+    console.error(`[PlatformHome] ${label} error:`, err?.message || err);
+    if (process.env.NODE_ENV !== 'production' && err?.stack) {
+      console.error(err.stack);
+    }
+    return typeof fallback === 'function' ? fallback() : fallback;
+  }
+}
+
 function summarizeAttentionItems(items) {
   const list = Array.isArray(items) ? items : [];
   const today = new Date();
@@ -133,11 +145,11 @@ async function getPlatformHomeSnapshot(req) {
   const organizationId = req.user.organizationId;
 
   const [attentionItems, approvalsPending, mail, resume, appPulses] = await Promise.all([
-    buildInboxItemsForUser(userId, organizationId),
-    getApprovalsPendingCount(userId, organizationId),
-    getMailCounts(req),
-    getResumeItems(userId, organizationId),
-    getAppPulses(req)
+    safePlatformHomeSection('attention', () => buildInboxItemsForUser(userId, organizationId), []),
+    safePlatformHomeSection('approvals', () => getApprovalsPendingCount(userId, organizationId), 0),
+    safePlatformHomeSection('mail', () => getMailCounts(req), { all: 0, unread: 0, assignedToMe: 0 }),
+    safePlatformHomeSection('resume', () => getResumeItems(userId, organizationId), []),
+    safePlatformHomeSection('appPulses', () => getAppPulses(req), [])
   ]);
 
   const summary = summarizeAttentionItems(attentionItems);
