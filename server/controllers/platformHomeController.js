@@ -14,11 +14,15 @@ exports.getPlatformHome = async (req, res) => {
       data
     });
   } catch (error) {
-    console.error('[PlatformHome] getPlatformHome error:', error);
+    console.error('[PlatformHome] getPlatformHome error:', error?.message || error);
+    if (error?.stack) {
+      console.error(error.stack);
+    }
     return res.status(500).json({
       success: false,
       message: 'Failed to load platform home',
-      error: error.message
+      error: error?.message || 'Unknown error',
+      code: error?.code || 'PLATFORM_HOME_ERROR'
     });
   }
 };

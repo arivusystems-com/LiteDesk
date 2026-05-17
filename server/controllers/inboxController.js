@@ -551,25 +551,29 @@ async function fetchInboxEvents(userId, organizationId) {
   const now = new Date();
   const startingSoonCutoff = addHours(now, STARTING_SOON_WINDOW_HOURS);
 
-  // Find events where user has a role
+  // Find events where user has a role AND (starting soon OR pending audit action)
   const events = await Event.find({
     organizationId: organizationId,
     status: { $nin: ['Completed', 'Cancelled'] },
-    $or: [
-      { eventOwnerId: userId },
-      { auditorId: userId },
-      { reviewerId: userId },
-      { correctiveOwnerId: userId }
-    ],
-    $or: [
-      // Starting soon
-      { startDateTime: { $lte: startingSoonCutoff } },
-      // Or has pending actions (will filter by attention type later)
-      { auditState: { $in: ['needs_review', 'pending_corrective', 'submitted'] } }
+    $and: [
+      {
+        $or: [
+          { eventOwnerId: userId },
+          { auditorId: userId },
+          { reviewerId: userId },
+          { correctiveOwnerId: userId }
+        ]
+      },
+      {
+        $or: [
+          { startDateTime: { $lte: startingSoonCutoff } },
+          { auditState: { $in: ['needs_review', 'pending_corrective', 'submitted'] } }
+        ]
+      }
     ]
   })
-    .populate('relatedToId', 'name')
-    .populate('organizationId', 'name')
+    .populate({ path: 'relatedToId', select: 'name', strictPopulate: false })
+    .populate({ path: 'organizationId', select: 'name', strictPopulate: false })
     .lean();
 
   // Filter events that actually require attention
