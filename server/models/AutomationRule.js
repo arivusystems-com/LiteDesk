@@ -79,6 +79,11 @@ const AutomationRuleSchema = new mongoose.Schema({
     type: Number,
     default: 0,
     index: true
+  },
+  /** When true, actions run at next open instant instead of immediately outside business hours */
+  respectBusinessHours: {
+    type: Boolean,
+    default: false
   }
 }, {
   timestamps: true

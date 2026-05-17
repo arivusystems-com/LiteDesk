@@ -102,47 +102,15 @@
           <p v-if="form.memberUserIds.length === 0" class="mt-2 text-xs text-amber-600">Select at least one member.</p>
         </section>
 
-        <section class="rounded-2xl border border-gray-200/80 bg-white p-6 shadow-sm dark:border-gray-700/80 dark:bg-gray-900/80">
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Availability</h2>
-          <div class="mt-4 flex flex-wrap gap-2">
-            <button
-              v-for="(label, idx) in DAY_LABELS"
-              :key="idx"
-              type="button"
-              class="rounded-full px-3.5 py-1.5 text-sm font-medium transition-all"
-              :class="form.availableDays.includes(idx)
-                ? 'bg-indigo-600 text-white'
-                : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'"
-              @click="toggleDay(idx)"
-            >
-              {{ label }}
-            </button>
-          </div>
-          <div class="mt-5 grid gap-4 sm:grid-cols-2">
-            <div>
-              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">From</label>
-              <input v-model="form.workingHours.start" type="time" class="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
-            </div>
-            <div>
-              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">To</label>
-              <input v-model="form.workingHours.end" type="time" class="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5 dark:border-gray-600 dark:bg-gray-800 dark:text-white" />
-            </div>
-          </div>
-          <div class="mt-5 grid gap-4 sm:grid-cols-2">
-            <div>
-              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Slot length</label>
-              <select v-model.number="form.slotDurationMinutes" class="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5 dark:border-gray-600 dark:bg-gray-800 dark:text-white">
-                <option v-for="o in SLOT_DURATION_OPTIONS" :key="o.value" :value="o.value">{{ o.label }}</option>
-              </select>
-            </div>
-            <div>
-              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Buffer</label>
-              <select v-model.number="form.bufferMinutes" class="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5 dark:border-gray-600 dark:bg-gray-800 dark:text-white">
-                <option v-for="o in BUFFER_OPTIONS" :key="o.value" :value="o.value">{{ o.label }}</option>
-              </select>
-            </div>
-          </div>
-        </section>
+        <AppointmentBookingScheduleSection
+          v-model:schedule-source="form.scheduleSource"
+          v-model:business-hour-set-id="form.businessHourSetId"
+          v-model:available-days="form.availableDays"
+          v-model:working-hours="form.workingHours"
+          v-model:slot-duration-minutes="form.slotDurationMinutes"
+          v-model:buffer-minutes="form.bufferMinutes"
+          :inherit-user-id="teamOwnerId"
+        />
 
         <AppointmentCustomFieldsEditor v-model="form.customFields" />
 
@@ -179,19 +147,19 @@ import { useRoute, useRouter } from 'vue-router';
 import apiClient from '@/utils/apiClient';
 import { useTabs } from '@/composables/useTabs';
 import { useNotifications } from '@/composables/useNotifications';
-import {
-  DAY_LABELS,
-  SLOT_DURATION_OPTIONS,
-  BUFFER_OPTIONS,
-  slugifyClient
-} from '@/utils/appointmentFormatters';
+import { slugifyClient } from '@/utils/appointmentFormatters';
 import AppointmentCustomFieldsEditor from '@/components/appointments/AppointmentCustomFieldsEditor.vue';
 import AppointmentEmbedSnippet from '@/components/appointments/AppointmentEmbedSnippet.vue';
+import AppointmentBookingScheduleSection from '@/components/appointments/AppointmentBookingScheduleSection.vue';
+import { useAuthStore } from '@/stores/authRegistry';
 
 const route = useRoute();
 const router = useRouter();
+const authStore = useAuthStore();
 const { openTab } = useTabs();
 const { success: notifySuccess } = useNotifications();
+
+const teamOwnerId = computed(() => (authStore.user?._id ? String(authStore.user._id) : null));
 
 function goToPagesHub() {
   openTab('/appointments/pages', { title: 'Booking Pages', icon: '📅' });
@@ -215,6 +183,8 @@ const form = reactive({
   enabled: true,
   memberUserIds: [],
   assignmentStrategy: 'round_robin',
+  scheduleSource: 'legacy',
+  businessHourSetId: null,
   availableDays: [1, 2, 3, 4, 5],
   workingHours: { start: '09:00', end: '18:00', timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' },
   slotDurationMinutes: 30,
@@ -259,13 +229,6 @@ function maybeAutoSlug() {
   }
 }
 
-function toggleDay(idx) {
-  const i = form.availableDays.indexOf(idx);
-  if (i >= 0) form.availableDays.splice(i, 1);
-  else form.availableDays.push(idx);
-  form.availableDays.sort((a, b) => a - b);
-}
-
 async function fetchUsers() {
   usersLoading.value = true;
   try {
@@ -295,6 +258,8 @@ async function loadTeam() {
         enabled: res.data.enabled !== false,
         memberUserIds: (res.data.memberUserIds || []).map((id) => String(id._id || id)),
         assignmentStrategy: res.data.assignmentStrategy || 'round_robin',
+        scheduleSource: res.data.scheduleSource || 'legacy',
+        businessHourSetId: res.data.businessHourSetId ? String(res.data.businessHourSetId) : null,
         availableDays: [...(res.data.availableDays || [1, 2, 3, 4, 5])],
         workingHours: { ...form.workingHours, ...(res.data.workingHours || {}) },
         slotDurationMinutes: res.data.slotDurationMinutes ?? 30,
@@ -315,7 +280,9 @@ async function loadTeam() {
 async function handleSave() {
   saving.value = true;
   error.value = null;
-  form.workingHours.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || form.workingHours.timezone;
+  if (form.scheduleSource === 'legacy') {
+    form.workingHours.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || form.workingHours.timezone;
+  }
   try {
     const payload = { ...form };
     const res = isEdit.value

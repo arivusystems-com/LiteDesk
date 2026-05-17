@@ -222,6 +222,7 @@ const NotificationSettings = defineAsyncComponent(() => import('@/components/set
 const DemoRequests = defineAsyncComponent(() => import('@/views/DemoRequests.vue'));
 const InstanceManagement = defineAsyncComponent(() => import('@/views/InstanceManagement.vue'));
 const AssignmentRulesSettings = defineAsyncComponent(() => import('@/components/settings/AssignmentRulesSettings.vue'));
+const BusinessHoursSettings = defineAsyncComponent(() => import('@/components/settings/BusinessHoursSettings.vue'));
 
 const authStore = useAuthStore();
 const { colorMode, toggleColorMode } = useColorMode();
@@ -362,6 +363,20 @@ const AppsIcon = () => h('svg', {
   })
 ]);
 
+const BusinessHoursIcon = () => h('svg', {
+  fill: 'none',
+  stroke: 'currentColor',
+  viewBox: '0 0 24 24',
+  xmlns: 'http://www.w3.org/2000/svg'
+}, [
+  h('path', {
+    'stroke-linecap': 'round',
+    'stroke-linejoin': 'round',
+    'stroke-width': '2',
+    d: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z'
+  })
+]);
+
 const AutomationIcon = () => h('svg', {
   fill: 'none',
   stroke: 'currentColor',
@@ -400,6 +415,7 @@ const tabs = computed(() => {
   const all = [
     { id: 'profile', name: 'Your Profile', icon: ProfileIcon, component: ProfileSettings },
     { id: 'organization', name: 'Company Details', icon: PlatformIcon, component: OrganizationSettings },
+    { id: 'business-hours', name: 'Business Hours', icon: BusinessHoursIcon, component: BusinessHoursSettings },
     { id: 'users-access', name: 'Users & Access', icon: UsersIcon, component: UsersAccessSettings },
     { id: 'core-modules', name: 'Core Modules', icon: CoreModulesIcon, component: CoreModulesList },
     { id: 'applications', name: 'Applications', icon: AppsIcon, component: ApplicationsList },

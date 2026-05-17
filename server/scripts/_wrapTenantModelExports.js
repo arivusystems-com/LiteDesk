@@ -64,6 +64,8 @@ const TENANT_SCOPED_MODELS = [
     'AssignmentRuleSet',
     'AssignmentExecutionLog',
     'AssignmentScheduleJob',
+  'DeferredAutomationAction',
+    'BusinessHoursDailyKpi',
     'Communication',
     'RelationshipInstance',
     'Report',

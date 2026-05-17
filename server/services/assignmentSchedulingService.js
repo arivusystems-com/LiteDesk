@@ -6,6 +6,10 @@ const Group = require('../models/Group');
 const { simulateAssignment } = require('./assignmentRulesEngine');
 const { loadRecordForAssignmentJob } = require('../utils/assignmentRecordLoader');
 const assignmentExecution = require('./assignmentExecutionService');
+const {
+  getNextOpenInstantForUsers,
+  collectMemberIdsForRule
+} = require('./assignmentAvailabilityService');
 const { emitNotification } = require('./notificationEngine');
 const notificationDomainEvents = require('../constants/domainEvents');
 const { emitSalesRecordOwnerAssignedNotify } = require('./assignmentSalesOwnerNotify');
@@ -617,6 +621,21 @@ async function processDueAssignmentJobs() {
         skipped += 1;
         processed += 1;
         continue;
+      }
+
+      if (job.details?.waitForBusinessHours) {
+        const memberIds = await collectMemberIdsForRule(job.organizationId, rule);
+        const nextAt = await getNextOpenInstantForUsers(job.organizationId, memberIds, now);
+        if (nextAt && nextAt > now) {
+          job.status = 'pending';
+          job.runAt = nextAt;
+          job.lastError = null;
+          await job.save();
+          noteSkip('rescheduled_off_hours');
+          skipped += 1;
+          processed += 1;
+          continue;
+        }
       }
 
       if (rule.triggerConfig?.recheckConditionsAtExecution !== false) {

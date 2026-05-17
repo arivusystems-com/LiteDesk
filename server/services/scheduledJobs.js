@@ -7,6 +7,8 @@ const { tickHelpdeskSlaNotifications } = require('./helpdeskSlaMonitorService');
 const { tickScheduledGmailInboxSync } = require('./gmailInboxSyncSchedulerService');
 const { tickSnoozeWakeNotifications } = require('./snoozeWakeNotificationSchedulerService');
 const { tickAppointmentReminders } = require('./appointmentReminderSchedulerService');
+const { processDueDeferredAutomationActions } = require('./deferredAutomationSchedulerService');
+const { tickBusinessHoursKpiAggregation } = require('./businessHoursKpiSchedulerService');
 
 const NOTIFICATION_DEBUG = process.env.NOTIFICATION_DEBUG === 'true';
 const ENABLE_DIGEST_SCHEDULER = process.env.ENABLE_DIGEST_SCHEDULER !== 'false'; // Default: enabled
@@ -19,6 +21,10 @@ const ENABLE_SNOOZE_WAKE_NOTIFICATION_SCHEDULER =
   process.env.ENABLE_SNOOZE_WAKE_NOTIFICATION_SCHEDULER !== 'false'; // Default: enabled (Phase 6)
 const ENABLE_APPOINTMENT_REMINDER_SCHEDULER =
   process.env.ENABLE_APPOINTMENT_REMINDER_SCHEDULER !== 'false'; // Default: enabled
+const ENABLE_DEFERRED_AUTOMATION_SCHEDULER =
+  process.env.ENABLE_DEFERRED_AUTOMATION_SCHEDULER !== 'false';
+const ENABLE_BUSINESS_HOURS_KPI_SCHEDULER =
+  process.env.ENABLE_BUSINESS_HOURS_KPI_SCHEDULER !== 'false';
 
 let dailyDigestJob = null;
 let weeklyDigestJob = null;
@@ -29,6 +35,8 @@ let helpdeskSlaJob = null;
 let gmailInboxSyncJob = null;
 let snoozeWakeNotificationJob = null;
 let appointmentReminderJob = null;
+let deferredAutomationJob = null;
+let businessHoursKpiJob = null;
 
 /**
  * Initialize and start scheduled jobs (node-cron).
@@ -153,6 +161,41 @@ function startScheduledJobs() {
     console.log('[scheduledJobs]   - Assignment scheduler: every minute');
   } else {
     console.log('[scheduledJobs] Assignment scheduler disabled (ENABLE_ASSIGNMENT_SCHEDULER=false)');
+  }
+
+  if (ENABLE_DEFERRED_AUTOMATION_SCHEDULER) {
+    deferredAutomationJob = cron.schedule('* * * * *', async () => {
+      try {
+        const result = await processDueDeferredAutomationActions();
+        if (result.processed > 0 || NOTIFICATION_DEBUG) {
+          console.log(
+            `[scheduledJobs] Deferred automation tick: processed=${result.processed} completed=${result.completed} rescheduled=${result.rescheduled} failed=${result.failed}`
+          );
+        }
+      } catch (err) {
+        console.error('[scheduledJobs] Deferred automation tick failed:', err.message);
+      }
+    }, { scheduled: true, timezone: process.env.DIGEST_TIMEZONE || 'UTC' });
+    console.log('[scheduledJobs]   - Deferred automation: every minute');
+  }
+
+  if (ENABLE_BUSINESS_HOURS_KPI_SCHEDULER) {
+    const kpiCron = String(process.env.BUSINESS_HOURS_KPI_CRON || '15 3 * * *').trim();
+    if (cron.validate(kpiCron)) {
+      businessHoursKpiJob = cron.schedule(kpiCron, async () => {
+        try {
+          const result = await tickBusinessHoursKpiAggregation();
+          console.log(
+            `[scheduledJobs] Business hours KPI: tenants=${result.tenants} processed=${result.processed} failed=${result.failed}`
+          );
+        } catch (err) {
+          console.error('[scheduledJobs] Business hours KPI tick failed:', err.message);
+        }
+      }, { scheduled: true, timezone: process.env.DIGEST_TIMEZONE || 'UTC' });
+      console.log(`[scheduledJobs]   - Business hours KPI aggregation: ${kpiCron}`);
+    } else {
+      console.error(`[scheduledJobs] Invalid BUSINESS_HOURS_KPI_CRON="${kpiCron}"`);
+    }
   }
 
   if (ENABLE_HELPDESK_SLA_SCHEDULER) {
@@ -331,6 +374,18 @@ function stopScheduledJobs() {
     appointmentReminderJob.stop();
     appointmentReminderJob = null;
     console.log('[scheduledJobs] Appointment reminder job stopped');
+  }
+
+  if (deferredAutomationJob) {
+    deferredAutomationJob.stop();
+    deferredAutomationJob = null;
+    console.log('[scheduledJobs] Deferred automation job stopped');
+  }
+
+  if (businessHoursKpiJob) {
+    businessHoursKpiJob.stop();
+    businessHoursKpiJob = null;
+    console.log('[scheduledJobs] Business hours KPI job stopped');
   }
 }
 

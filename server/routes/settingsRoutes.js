@@ -34,6 +34,7 @@ router.put('/core-modules/people/people-types', controller.updatePeopleTypes);
 router.get('/applications', cacheJsonResponse({ namespace: 'settings:applications' }), controller.getApplications);
 router.get('/applications/helpdesk/execution-settings', helpdeskSettingsController.getHelpdeskExecutionSettings);
 router.put('/applications/helpdesk/execution-settings', helpdeskSettingsController.updateHelpdeskExecutionSettings);
+router.post('/applications/helpdesk/recalculate-slas', helpdeskSettingsController.recalculateOpenCaseSlas);
 router.get('/applications/:appKey', controller.getApplication);
 
 // Assignment Rules (Step 7A simulation foundation)

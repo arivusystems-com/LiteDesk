@@ -254,7 +254,8 @@ exports.createRule = async (req, res) => {
         type: req.body.action.type,
         params: req.body.action.params || null
       },
-      order: req.body.order || 0
+      order: req.body.order || 0,
+      respectBusinessHours: Boolean(req.body.respectBusinessHours)
     };
     
     const rule = await AutomationRule.create(ruleData);
@@ -327,6 +328,9 @@ exports.updateRule = async (req, res) => {
       };
     }
     if (updateData.order !== undefined) rule.order = updateData.order;
+    if (updateData.respectBusinessHours !== undefined) {
+      rule.respectBusinessHours = Boolean(updateData.respectBusinessHours);
+    }
     
     await rule.save();
     

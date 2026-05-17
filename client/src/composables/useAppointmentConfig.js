@@ -5,6 +5,8 @@ const defaultConfig = () => ({
   displayName: '',
   slug: '',
   enabled: true,
+  scheduleSource: 'legacy',
+  businessHourSetId: null,
   availableDays: [1, 2, 3, 4, 5],
   workingHours: { start: '09:00', end: '18:00', timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' },
   slotDurationMinutes: 30,

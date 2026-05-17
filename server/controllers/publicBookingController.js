@@ -1,6 +1,8 @@
 const AppointmentBookingConfig = require('../models/AppointmentBookingConfig');
 const User = require('../models/User');
 const { getSlotsForDate } = require('../services/appointmentAvailabilityService');
+const { resolveScheduleForBookingConfig, getDisplayTimezone } = require('../services/appointmentBusinessHoursService');
+const { describeDayAvailability } = require('../services/businessHoursEngine');
 const { getTeamSlotsForDate, loadTeamMembersPublic, pickTeamAssignee } = require('../services/appointmentTeamService');
 const { bookAppointment } = require('../services/appointmentBookingService');
 const { buildManageUrl } = require('../utils/appointmentManageToken');
@@ -90,23 +92,38 @@ exports.getPublicSlots = async (req, res) => {
 
     const lean = config.toObject ? config.toObject() : config;
     let slots;
+    let scheduleTimezone = timezone || lean.workingHours?.timezone || 'UTC';
+    let dayMeta = null;
 
     if (lean.ownerType === 'team') {
       slots = await getTeamSlotsForDate(lean, date);
+      const resolved = await resolveScheduleForBookingConfig(
+        lean,
+        lean.organizationId,
+        lean.ownerId
+      );
+      scheduleTimezone = getDisplayTimezone(lean, resolved);
+      dayMeta = describeDayAvailability(resolved.schedule, date);
     } else {
-      slots = await getSlotsForDate(
+      const result = await getSlotsForDate(
         lean,
         date,
         lean.ownerId,
         lean.organizationId
       );
+      slots = result.slots;
+      scheduleTimezone = result.timezone || scheduleTimezone;
+      dayMeta = result.dayMeta;
     }
 
     res.status(200).json({
       success: true,
       data: {
         date,
-        timezone: timezone || lean.workingHours?.timezone || 'UTC',
+        timezone: scheduleTimezone,
+        visitorTimezone: timezone || null,
+        dayClosed: Boolean(dayMeta?.closed),
+        dayClosedReason: dayMeta?.closed ? dayMeta.reason : null,
         slots
       }
     });

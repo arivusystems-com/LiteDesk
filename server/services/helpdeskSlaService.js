@@ -1,4 +1,11 @@
+'use strict';
+
 const TenantAppConfiguration = require('../models/TenantAppConfiguration');
+const {
+  addBusinessMinutes,
+  formatScheduleSummary
+} = require('./businessHoursEngine');
+const { resolveSlaScheduleForOrganization } = require('./helpdeskBusinessHoursService');
 
 const DEFAULT_PRIORITY_TARGETS_MINUTES = {
   Low: { firstResponseMinutes: 8 * 60, resolutionMinutes: 72 * 60 },
@@ -7,95 +14,21 @@ const DEFAULT_PRIORITY_TARGETS_MINUTES = {
   Critical: { firstResponseMinutes: 1 * 60, resolutionMinutes: 8 * 60 }
 };
 
-function parseTimeToMinutes(value, fallbackMinutes) {
-  if (!value || typeof value !== 'string' || !value.includes(':')) return fallbackMinutes;
-  const [hh, mm] = value.split(':').map((part) => Number(part));
-  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return fallbackMinutes;
-  return (hh * 60) + mm;
-}
-
-function cloneDate(date) {
-  return new Date(date.getTime());
-}
-
-function startOfBusinessWindow(date, startMinutes) {
-  const d = cloneDate(date);
-  d.setHours(0, 0, 0, 0);
-  d.setMinutes(startMinutes);
-  return d;
-}
-
-function endOfBusinessWindow(date, endMinutes) {
-  const d = cloneDate(date);
-  d.setHours(0, 0, 0, 0);
-  d.setMinutes(endMinutes);
-  return d;
-}
-
-function nextDay(date) {
-  const d = cloneDate(date);
-  d.setDate(d.getDate() + 1);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
 function normalizeBusinessHours(input = null) {
   const candidate = input && typeof input === 'object' ? input : {};
   const workingDays = Array.isArray(candidate.workingDays) && candidate.workingDays.length > 0
     ? candidate.workingDays.filter((day) => Number.isInteger(day) && day >= 0 && day <= 6)
     : [1, 2, 3, 4, 5];
 
-  const startMinutes = parseTimeToMinutes(candidate.startTime, 9 * 60);
-  const endMinutes = parseTimeToMinutes(candidate.endTime, 18 * 60);
-
   return {
     enabled: Boolean(candidate.enabled),
+    scheduleSource: candidate.scheduleSource || null,
+    businessHourSetId: candidate.businessHourSetId || null,
     timezone: candidate.timezone || 'UTC',
     workingDays,
     startTime: candidate.startTime || '09:00',
-    endTime: candidate.endTime || '18:00',
-    startMinutes,
-    endMinutes: endMinutes > startMinutes ? endMinutes : (startMinutes + 60)
+    endTime: candidate.endTime || '18:00'
   };
-}
-
-function addMinutesWithinBusinessHours(startAt, minutesToAdd, businessHours) {
-  if (!businessHours?.enabled) {
-    return new Date(startAt.getTime() + (minutesToAdd * 60000));
-  }
-
-  let remaining = Math.max(0, Number(minutesToAdd) || 0);
-  let cursor = cloneDate(startAt);
-  let guard = 0;
-
-  while (remaining > 0 && guard < 20000) {
-    guard += 1;
-    const day = cursor.getDay();
-    const isWorkingDay = businessHours.workingDays.includes(day);
-    const dayStart = startOfBusinessWindow(cursor, businessHours.startMinutes);
-    const dayEnd = endOfBusinessWindow(cursor, businessHours.endMinutes);
-
-    if (!isWorkingDay || cursor >= dayEnd) {
-      cursor = startOfBusinessWindow(nextDay(cursor), businessHours.startMinutes);
-      continue;
-    }
-
-    if (cursor < dayStart) {
-      cursor = dayStart;
-    }
-
-    const availableMinutes = Math.floor((dayEnd.getTime() - cursor.getTime()) / 60000);
-    if (availableMinutes <= 0) {
-      cursor = startOfBusinessWindow(nextDay(cursor), businessHours.startMinutes);
-      continue;
-    }
-
-    const consume = Math.min(availableMinutes, remaining);
-    cursor = new Date(cursor.getTime() + (consume * 60000));
-    remaining -= consume;
-  }
-
-  return cursor;
 }
 
 function normalizeTargets(targets = {}) {
@@ -172,8 +105,9 @@ function resolvePolicyForCase(config, { caseType, priority, channel }) {
   };
 }
 
-function buildPolicySnapshot(policy, context, businessHours, computedAt) {
-  return {
+function buildPolicySnapshot(policy, context, scheduleResolution, computedAt) {
+  const { useCalendarTime, schedule, meta } = scheduleResolution;
+  const snapshot = {
     key: policy.policyKey,
     name: policy.policyName,
     caseType: context.caseType,
@@ -182,27 +116,66 @@ function buildPolicySnapshot(policy, context, businessHours, computedAt) {
     firstResponseMinutes: policy.targets.firstResponseMinutes,
     resolutionMinutes: policy.targets.resolutionMinutes,
     businessHours: {
-      enabled: businessHours.enabled,
-      timezone: businessHours.timezone,
-      workingDays: businessHours.workingDays,
-      startTime: businessHours.startTime,
-      endTime: businessHours.endTime
+      enabled: !useCalendarTime,
+      mode: useCalendarTime ? 'calendar' : 'business',
+      scheduleSource: meta?.source || null,
+      scheduleName: meta?.name || null,
+      businessHourSetId: meta?.setId || null,
+      summary: useCalendarTime ? '24/7 SLA clock' : (meta?.summary || formatScheduleSummary(schedule)),
+      timezone: meta?.timezone || schedule?.timezone || 'UTC'
     },
     computedAt
+  };
+
+  if (!useCalendarTime && schedule) {
+    const legacyDays = [];
+    for (let d = 0; d <= 6; d += 1) {
+      if (schedule.weekByDay?.[d]?.enabled) legacyDays.push(d);
+    }
+    const sampleWindow = schedule.weekByDay?.[legacyDays[0]]?.windows?.[0];
+    snapshot.businessHours.workingDays = legacyDays;
+    snapshot.businessHours.startTime = sampleWindow?.start || '09:00';
+    snapshot.businessHours.endTime = sampleWindow?.end || '18:00';
+  } else if (useCalendarTime) {
+    snapshot.businessHours.workingDays = [0, 1, 2, 3, 4, 5, 6];
+    snapshot.businessHours.startTime = '00:00';
+    snapshot.businessHours.endTime = '23:59';
+  }
+
+  return snapshot;
+}
+
+function addTargetsFromSchedule(startedAt, targets, scheduleResolution) {
+  const start = startedAt instanceof Date ? startedAt : new Date(startedAt);
+  const { useCalendarTime, schedule } = scheduleResolution;
+
+  if (useCalendarTime || !schedule) {
+    return {
+      responseTargetAt: new Date(start.getTime() + targets.firstResponseMinutes * 60000),
+      resolutionTargetAt: new Date(start.getTime() + targets.resolutionMinutes * 60000)
+    };
+  }
+
+  return {
+    responseTargetAt: addBusinessMinutes(start, targets.firstResponseMinutes, schedule),
+    resolutionTargetAt: addBusinessMinutes(start, targets.resolutionMinutes, schedule)
   };
 }
 
 async function computeSlaTargetsForCase(organizationId, context, startedAt = new Date()) {
   const config = await loadHelpdeskSlaConfig(organizationId);
-  const businessHours = config.businessHours;
+  const scheduleResolution = await resolveSlaScheduleForOrganization(organizationId);
   const policy = resolvePolicyForCase(config, context);
-  const responseTargetAt = addMinutesWithinBusinessHours(startedAt, policy.targets.firstResponseMinutes, businessHours);
-  const resolutionTargetAt = addMinutesWithinBusinessHours(startedAt, policy.targets.resolutionMinutes, businessHours);
+  const { responseTargetAt, resolutionTargetAt } = addTargetsFromSchedule(
+    startedAt,
+    policy.targets,
+    scheduleResolution
+  );
 
   return {
     responseTargetAt,
     resolutionTargetAt,
-    policySnapshot: buildPolicySnapshot(policy, context, businessHours, new Date())
+    policySnapshot: buildPolicySnapshot(policy, context, scheduleResolution, new Date())
   };
 }
 
@@ -219,6 +192,7 @@ async function applySlaTargetsToCycle({ organizationId, cycle, context, startedA
 
 module.exports = {
   loadHelpdeskSlaConfig,
+  normalizeBusinessHours,
   computeSlaTargetsForCase,
   applySlaTargetsToCycle
 };

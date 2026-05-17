@@ -42,6 +42,13 @@ const GroupSchema = new Schema({
         ref: 'User',
         default: null
     },
+
+    /** Optional team/department business hours (BusinessHourSet) */
+    businessHourSetId: {
+        type: Schema.Types.ObjectId,
+        ref: 'BusinessHourSet',
+        default: null
+    },
     
     // Role & Permissions - Assign multiple roles to this group
     roleIds: [{

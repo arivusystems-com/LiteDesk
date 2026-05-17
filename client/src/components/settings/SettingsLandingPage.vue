@@ -79,6 +79,20 @@ const OrganizationIcon = () => h('svg', {
   })
 ]);
 
+const BusinessHoursIcon = () => h('svg', {
+  fill: 'none',
+  stroke: 'currentColor',
+  viewBox: '0 0 24 24',
+  xmlns: 'http://www.w3.org/2000/svg'
+}, [
+  h('path', {
+    'stroke-linecap': 'round',
+    'stroke-linejoin': 'round',
+    'stroke-width': '2',
+    d: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z'
+  })
+]);
+
 const UsersAccessIcon = () => h('svg', {
   fill: 'none',
   stroke: 'currentColor',
@@ -207,6 +221,13 @@ const sections = computed(() => {
       description: 'Manage your company information, branding, and company-wide preferences',
       icon: OrganizationIcon,
       route: '/settings?tab=organization',
+    },
+    {
+      id: 'business-hours',
+      name: 'Business Hours & Availability',
+      description: 'Set company, team, and personal working hours for booking, SLAs, and assignments',
+      icon: BusinessHoursIcon,
+      route: '/settings?tab=business-hours',
     },
     {
       id: 'users-access',

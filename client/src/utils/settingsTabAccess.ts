@@ -35,6 +35,8 @@ export function canAccessSettingsTab(
     case 'automation':
       // Same bar as application configuration: assignment routing affects operational behavior org-wide.
       return Boolean(p.edit);
+    case 'business-hours':
+      return true;
     default:
       return false;
   }
@@ -51,6 +53,7 @@ const SETTINGS_TAB_IDS = [
   'notifications',
   'security',
   'integrations',
+  'business-hours',
 ] as const;
 
 /** True if the user should see the Settings entry or any settings section (not only Overview). */

@@ -64,6 +64,17 @@ const appointmentBookingConfigSchema = new Schema({
     end: { type: String, default: '18:00' },
     timezone: { type: String, default: 'UTC' }
   },
+  /** inherit = user/team/company Business Hours; custom = businessHourSetId; unset = legacy inline hours */
+  scheduleSource: {
+    type: String,
+    enum: ['inherit', 'custom', 'legacy'],
+    default: null
+  },
+  businessHourSetId: {
+    type: Schema.Types.ObjectId,
+    ref: 'BusinessHourSet',
+    default: null
+  },
   slotDurationMinutes: {
     type: Number,
     enum: [15, 30, 45, 60],

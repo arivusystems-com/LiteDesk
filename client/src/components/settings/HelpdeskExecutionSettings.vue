@@ -70,55 +70,19 @@
       </div>
 
       <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">Business Hours</h3>
-        <div class="space-y-4">
-          <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-            <input v-model="form.businessHours.enabled" type="checkbox" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
-            <span>Use business hours for SLA calculations</span>
-          </label>
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div>
-              <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Timezone</label>
-              <input
-                v-model.trim="form.businessHours.timezone"
-                type="text"
-                placeholder="UTC"
-                class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
-            </div>
-            <div>
-              <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Start</label>
-              <input
-                v-model="form.businessHours.startTime"
-                type="time"
-                class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
-            </div>
-            <div>
-              <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">End</label>
-              <input
-                v-model="form.businessHours.endTime"
-                type="time"
-                class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
-            </div>
-          </div>
-          <div class="flex flex-wrap gap-3">
-            <label
-              v-for="day in weekDays"
-              :key="day.value"
-              class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300"
-            >
-              <input
-                v-model="form.businessHours.workingDays"
-                :value="day.value"
-                type="checkbox"
-                class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-              />
-              <span>{{ day.label }}</span>
-            </label>
-          </div>
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Business Hours (SLA)</h3>
+          <button
+            type="button"
+            class="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline disabled:opacity-50"
+            :disabled="recalculatingSlas"
+            @click="runSlaRecalculate"
+          >
+            {{ recalculatingSlas ? 'Recalculating…' : 'Recalculate open case SLAs' }}
+          </button>
         </div>
+        <p v-if="recalculateMessage" class="mb-3 text-sm text-emerald-700 dark:text-emerald-300">{{ recalculateMessage }}</p>
+        <HelpdeskSlaScheduleSection v-model:business-hours="form.businessHours" />
       </div>
 
       <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
@@ -204,6 +168,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import apiClient from '@/utils/apiClient';
+import HelpdeskSlaScheduleSection from '@/components/settings/HelpdeskSlaScheduleSection.vue';
 
 const router = useRouter();
 
@@ -223,15 +188,8 @@ const originalSnapshot = ref('');
 
 const caseTypes = ['Support Ticket', 'Complaint', 'Service Request', 'Warranty Claim', 'Internal Case'];
 const priorities = ['Low', 'Medium', 'High', 'Critical'];
-const weekDays = [
-  { value: 0, label: 'Sun' },
-  { value: 1, label: 'Mon' },
-  { value: 2, label: 'Tue' },
-  { value: 3, label: 'Wed' },
-  { value: 4, label: 'Thu' },
-  { value: 5, label: 'Fri' },
-  { value: 6, label: 'Sat' }
-];
+const recalculatingSlas = ref(false);
+const recalculateMessage = ref('');
 
 const notificationLabels = {
   notifyOnCreated: 'Notify on case creation',
@@ -245,6 +203,8 @@ const form = ref({
   slaPriorityTargets: {},
   businessHours: {
     enabled: false,
+    scheduleSource: 'legacy',
+    businessHourSetId: null,
     timezone: 'UTC',
     workingDays: [1, 2, 3, 4, 5],
     startTime: '09:00',
@@ -283,7 +243,13 @@ function updateSnapshot() {
 function applySettingsToForm(settings) {
   form.value.caseTypes = settings.caseTypes || { enabled: [...caseTypes] };
   form.value.slaPriorityTargets = settings.slaPriorityTargets || {};
-  form.value.businessHours = settings.businessHours || form.value.businessHours;
+  const bh = settings.businessHours || {};
+  form.value.businessHours = {
+    ...form.value.businessHours,
+    ...bh,
+    scheduleSource: bh.scheduleSource || (bh.enabled ? 'legacy' : 'legacy'),
+    businessHourSetId: bh.businessHourSetId ? String(bh.businessHourSetId) : null
+  };
   form.value.notifications = settings.notifications || form.value.notifications;
   form.value.defaultSlaPolicyKey = settings.defaultSlaPolicyKey || '';
   jsonEditors.value = {
@@ -343,11 +309,33 @@ function buildPayload() {
   };
 }
 
+async function runSlaRecalculate() {
+  recalculateMessage.value = '';
+  recalculatingSlas.value = true;
+  try {
+    const response = await apiClient('/settings/applications/helpdesk/recalculate-slas', {
+      method: 'POST',
+      body: JSON.stringify({ limit: 500 })
+    });
+    if (!response?.success) {
+      throw new Error(response?.message || 'Recalculation failed');
+    }
+    const { updated, scanned } = response.data || {};
+    recalculateMessage.value = `Updated SLA targets on ${updated ?? 0} of ${scanned ?? 0} open cases.`;
+  } catch (err) {
+    saveError.value = err?.message || 'Failed to recalculate SLAs';
+  } finally {
+    recalculatingSlas.value = false;
+  }
+}
+
 async function saveSettings() {
   saveError.value = '';
   saveSuccess.value = false;
   saving.value = true;
   try {
+    const prev = originalSnapshot.value ? JSON.parse(originalSnapshot.value) : null;
+    const oldBusinessHours = prev?.form?.businessHours;
     const payload = buildPayload();
     const response = await apiClient('/settings/applications/helpdesk/execution-settings', {
       method: 'PUT',
@@ -356,10 +344,14 @@ async function saveSettings() {
     if (!response?.success || !response?.settings) {
       throw new Error('Unexpected response while saving settings');
     }
+    const businessHoursChanged = JSON.stringify(oldBusinessHours) !== JSON.stringify(payload.settings.businessHours);
     applySettingsToForm(response.settings);
     ensurePriorityTargets();
     updateSnapshot();
     saveSuccess.value = true;
+    if (businessHoursChanged && payload.settings.businessHours?.enabled) {
+      recalculateMessage.value = 'Schedule saved. Recalculate open case SLAs to apply new targets.';
+    }
   } catch (err) {
     console.error('Failed to save helpdesk execution settings:', err);
     saveError.value = err?.message || 'Failed to save helpdesk execution settings';

@@ -38,6 +38,34 @@
       </div>
     </div>
 
+    <div
+      v-if="bhTotals"
+      class="bg-white dark:bg-gray-800 rounded-xl border border-indigo-200 dark:border-indigo-800/50 p-6"
+    >
+      <div class="flex items-center justify-between gap-3 mb-4">
+        <div>
+          <h4 class="text-base font-semibold text-gray-900 dark:text-white">Business hours impact</h4>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Capacity, in-hours activity, and off-hours SLA breaches</p>
+        </div>
+        <router-link
+          :to="{ path: '/settings', query: { tab: 'business-hours' } }"
+          class="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline shrink-0"
+        >
+          Manage schedules
+        </router-link>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div
+          v-for="card in bhCards"
+          :key="card.label"
+          class="rounded-lg border border-gray-100 dark:border-gray-700 p-3"
+        >
+          <p class="text-xs text-gray-500 dark:text-gray-400">{{ card.label }}</p>
+          <p class="text-lg font-semibold text-gray-900 dark:text-white mt-1">{{ card.value }}</p>
+        </div>
+      </div>
+    </div>
+
     <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
       <h4 class="text-base font-semibold text-gray-900 dark:text-white mb-4">Daily Trend (Created / Resolved / Breached)</h4>
       <div class="space-y-3 max-h-80 overflow-y-auto pr-1">
@@ -123,6 +151,19 @@ const summary = ref(null);
 const trends = ref([]);
 const owners = ref([]);
 const distribution = ref({ byPriority: [], byChannel: [], byCaseType: [] });
+const bhTotals = ref(null);
+
+const bhCards = computed(() => {
+  const t = bhTotals.value;
+  if (!t) return [];
+  const capH = Math.floor((t.businessMinutesAvailable || 0) / 60);
+  return [
+    { label: 'Scheduled capacity', value: `${capH}h` },
+    { label: 'In-hours activity', value: t.activitiesInsideHours ?? 0 },
+    { label: 'Overtime activity', value: t.overtimeCount ?? 0 },
+    { label: 'SLA breaches (off-hours)', value: t.slaBreachesOffHours ?? 0 }
+  ];
+});
 
 const toDateInput = (date) => date.toISOString().slice(0, 10);
 const now = new Date();
@@ -170,11 +211,17 @@ async function fetchAnalytics() {
     if (filters.value.to) params.set('to', new Date(filters.value.to).toISOString());
     const query = params.toString() ? `?${params.toString()}` : '';
 
-    const [summaryRes, trendsRes, ownersRes, distributionRes] = await Promise.all([
+    const bhQuery = new URLSearchParams();
+    if (filters.value.from) bhQuery.set('from', filters.value.from);
+    if (filters.value.to) bhQuery.set('to', filters.value.to);
+    const bhQs = bhQuery.toString() ? `?${bhQuery.toString()}` : '';
+
+    const [summaryRes, trendsRes, ownersRes, distributionRes, bhRes] = await Promise.all([
       apiClient(`/helpdesk/cases/analytics/summary${query}`, { method: 'GET' }),
       apiClient(`/helpdesk/cases/analytics/trends${query}`, { method: 'GET' }),
       apiClient(`/helpdesk/cases/analytics/owners${query}`, { method: 'GET' }),
-      apiClient(`/helpdesk/cases/analytics/distribution${query}`, { method: 'GET' })
+      apiClient(`/helpdesk/cases/analytics/distribution${query}`, { method: 'GET' }),
+      apiClient(`/business-hours/kpis${bhQs}`, { method: 'GET' }).catch(() => null)
     ]);
 
     if (!summaryRes?.success || !trendsRes?.success || !ownersRes?.success || !distributionRes?.success) {
@@ -185,6 +232,7 @@ async function fetchAnalytics() {
     trends.value = trendsRes.data?.points || [];
     owners.value = ownersRes.data || [];
     distribution.value = distributionRes.data || { byPriority: [], byChannel: [], byCaseType: [] };
+    bhTotals.value = bhRes?.success ? bhRes.data?.totals || null : null;
   } catch (err) {
     console.error('Failed to load Helpdesk analytics:', err);
     error.value = err?.message || 'Failed to load Helpdesk analytics';
