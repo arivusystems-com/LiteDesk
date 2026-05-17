@@ -445,7 +445,9 @@ connectMasterWithRetry(masterUri)
       try {
         const emailQueueService = require('./services/emailQueueService');
         emailQueueService.startWorker();
-        console.log('✅ Email queue consumer running in web process (set ENABLE_BULL_IN_WEB=false if using a dedicated worker)');
+        const inboundEmailQueueService = require('./services/inboundEmailQueueService');
+        inboundEmailQueueService.startWorker();
+        console.log('✅ Email + inbound queue consumers running in web process (set ENABLE_BULL_IN_WEB=false if using a dedicated worker)');
       } catch (eqErr) {
         console.warn('⚠️  Email queue worker not started:', eqErr.message);
       }

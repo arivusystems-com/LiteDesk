@@ -61,6 +61,35 @@ function extractEmailsFromHeaderValue(value) {
  * Catch-all / alias delivery often keeps the routed address only in envelope headers,
  * not in To (e.g. To: inbox@reply.domain but Delivered-To: reply+token@reply.domain).
  */
+/**
+ * Gmail / Workspace catch-all often leaves the routed address only in Received or odd headers.
+ * Scan the raw MIME (headers + body) for reply+token@domain as a last resort.
+ */
+function scanRoutingAddressesFromRawMime(rawBuffer) {
+  const maxBytes = Math.min(rawBuffer.length, 512 * 1024);
+  const text = rawBuffer.toString('utf8', 0, maxBytes);
+  const inbound = String(process.env.EMAIL_INBOUND_ADDRESS || '').trim();
+  const domainFromInbound = inbound.includes('@') ? inbound.split('@')[1].toLowerCase() : '';
+  const domain = String(
+    process.env.EMAIL_REPLY_TO_DOMAIN || process.env.CRM_REPLY_DOMAIN || domainFromInbound || 'reply.arivusystems.com'
+  )
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//i, '')
+    .split('/')[0];
+  const domainEsc = domain.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`(?:reply|replies)\\+([a-z0-9]{6,16})@${domainEsc}`, 'gi');
+  const out = [];
+  let match;
+  while ((match = re.exec(text)) !== null) {
+    const full = String(match[0]).trim().toLowerCase();
+    if (full && !out.includes(full)) {
+      out.push(full);
+    }
+  }
+  return out;
+}
+
 function collectEnvelopeRoutingAddresses(parsed) {
   const headerNames = [
     'delivered-to',
@@ -68,7 +97,10 @@ function collectEnvelopeRoutingAddresses(parsed) {
     'x-forwarded-to',
     'x-real-to',
     'envelope-to',
-    'resent-to'
+    'resent-to',
+    'x-gm-original-to',
+    'x-google-original-to',
+    'x-envelope-to'
   ];
   const out = [];
   if (!parsed.headers || typeof parsed.headers.get !== 'function') {
@@ -114,12 +146,23 @@ async function parseRawMime(rawBuffer) {
   const ccAddresses = collectAddresses(parsed.cc);
   const bccAddresses = collectAddresses(parsed.bcc);
   const envelopeRoutingAddresses = collectEnvelopeRoutingAddresses(parsed);
+  const mimeScanAddresses = scanRoutingAddressesFromRawMime(rawBuffer);
   const allRecipients = [
     ...toAddresses,
     ...ccAddresses,
     ...bccAddresses,
-    ...envelopeRoutingAddresses
+    ...envelopeRoutingAddresses,
+    ...mimeScanAddresses
   ];
+  // De-dupe (case-insensitive)
+  const seen = new Set();
+  const uniqueRecipients = [];
+  for (const addr of allRecipients) {
+    const key = String(addr || '').trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    uniqueRecipients.push(key);
+  }
 
   const messageId = stripBrackets(parsed.messageId);
   const inReplyTo = stripBrackets(parsed.inReplyTo);
@@ -152,7 +195,7 @@ async function parseRawMime(rawBuffer) {
       toAddresses,
       ccAddresses,
       bccAddresses,
-      allRecipients,
+      allRecipients: uniqueRecipients,
       subject,
       html,
       text,
