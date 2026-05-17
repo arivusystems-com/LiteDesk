@@ -36,7 +36,8 @@ const { createInitialSlaCycle } = require('../services/caseLifecycleService');
 const { applySlaTargetsToCycle } = require('../services/helpdeskSlaService');
 const caseExecutionService = require('../services/caseExecutionService');
 const communicationPlatformService = require('../platform/communication/api/communicationPlatformService');
-const emailProviderGateway = require('../platform/communication/providers/emailProviderGateway');
+const outboundEmailSendService = require('../platform/communication/outbound/outboundEmailSendService');
+const { resolveDefaultGmailMailboxForUser } = require('../services/mailboxGmailInboxSyncService');
 const emailQueueService = require('../services/emailQueueService');
 const { appendCommunicationEvent } = require('../services/communicationEventWriter');
 const {
@@ -306,14 +307,23 @@ exports.sendEmail = async (req, res) => {
       });
     }
 
-    if (!(await communicationPlatformService.canSendEmailNow({ organizationId: orgId }))) {
+    if (
+      !(await communicationPlatformService.canSendEmailNow({
+        organizationId: orgId,
+        userId: req.user._id,
+        user: req.user,
+        moduleKey
+      }))
+    ) {
       return res.status(503).json({
         success: false,
-        message: 'Email service is not configured. Configure AWS SES, OCI Email Delivery, or SMTP in environment.'
+        message:
+          'Email is not configured. Connect a Gmail mailbox or configure AWS SES, OCI Email Delivery, or SMTP.',
+        code: 'EMAIL_SEND_NOT_CONFIGURED'
       });
     }
 
-    const fromAddr = req.user.email || process.env.EMAIL_FROM;
+    let fromAddr = req.user.email || process.env.EMAIL_FROM;
     const messageId = generateMessageId();
     let threadId = null;
     let inReplyTo = null;
@@ -361,6 +371,50 @@ exports.sendEmail = async (req, res) => {
         });
       }
       mailboxIdOutbound = mb._id;
+    }
+
+    if (
+      !mailboxIdOutbound
+      && (moduleKey === 'workspace' || outboundPolicy.requireMailboxProviderForAgentSend === true)
+    ) {
+      const autoMb = await resolveDefaultGmailMailboxForUser(orgId, req.user);
+      if (autoMb) {
+        mailboxIdOutbound = autoMb._id;
+      }
+    }
+
+    const sendableMailbox = mailboxIdOutbound
+      ? await outboundEmailSendService.findMailboxForOutbound(orgId, mailboxIdOutbound)
+      : null;
+    const sendableViaGmailApi =
+      sendableMailbox && require('../services/mailboxGmailInboxSyncService').isGmailMailboxReady(sendableMailbox);
+    const sendableViaGmailSmtp =
+      sendableMailbox && require('../services/mailboxGmailSmtpService').isMailboxGmailSmtpReady(sendableMailbox);
+
+    if (moduleKey === 'workspace' && outboundPolicy.disallowPlatformSmtpForWorkspace === true) {
+      if (!sendableViaGmailApi && !sendableViaGmailSmtp) {
+        return res.status(403).json({
+          success: false,
+          message:
+            'Workspace email requires a connected Gmail mailbox. Connect a mailbox in Inbox settings.',
+          code: 'WORKSPACE_SMTP_DISABLED'
+        });
+      }
+    }
+
+    if (outboundPolicy.requireMailboxProviderForAgentSend === true && !sendableViaGmailApi && !sendableViaGmailSmtp) {
+      return res.status(403).json({
+        success: false,
+        message: 'Outbound email requires a connected Gmail mailbox for this tenant.',
+        code: 'MAILBOX_PROVIDER_REQUIRED'
+      });
+    }
+
+    if (sendableViaGmailApi || sendableViaGmailSmtp) {
+      const mailboxFrom = outboundEmailSendService.resolveMailboxFromAddress(sendableMailbox);
+      if (mailboxFrom) {
+        fromAddr = mailboxFrom;
+      }
     }
 
     // Step 1: Insert (status: 'sending')
@@ -429,7 +483,7 @@ exports.sendEmail = async (req, res) => {
     }
 
     // Step 2: Send — use queue when Redis available, else sync
-    if (communicationPlatformService.enqueueOutboundEmail(doc._id.toString())) {
+    if (communicationPlatformService.enqueueOutboundEmail(doc._id.toString(), orgId)) {
       await appendCommunicationEvent({
         organizationId: orgId,
         communicationId: doc._id,
@@ -443,70 +497,13 @@ exports.sendEmail = async (req, res) => {
     }
 
     // Sync send (no Redis)
-    const textBody = (body || '').replace(/<[^>]+>/g, '');
-    let replyToAddr;
-    try {
-      replyToAddr = replyToTokenService.buildReplyToAddress({ orgId, moduleKey, recordId });
-    } catch {
-      replyToAddr = process.env.EMAIL_REPLY_TO;
-    }
-    replyToAddr = resolveSafeReplyToAddress(replyToAddr);
-
-    const emailAttachments = [];
-    if (attachments && attachments.length > 0) {
-      for (const att of attachments) {
-        const storagePath = att.storagePath;
-        if (!storagePath) continue;
-        const fullPath = path.join(uploadsDir, storagePath);
-        try {
-          const content = fs.readFileSync(fullPath);
-          emailAttachments.push({
-            filename: att.fileName || path.basename(storagePath),
-            content
-          });
-        } catch (readErr) {
-          console.error('[communicationsController] Failed to read attachment:', storagePath, readErr.message);
-          await Communication.findByIdAndUpdate(doc._id, {
-            status: 'failed',
-            sentAt: new Date()
-          });
-          await appendCommunicationEvent({
-            organizationId: orgId,
-            communicationId: doc._id,
-            eventType: 'failed',
-            source: 'communications-api',
-            idempotencyKeyHash,
-            payload: {
-              failureCategory: 'attachment_error',
-              reason: 'attachment_read_failed',
-              attachment: att.fileName || storagePath
-            }
-          });
-          return res.status(400).json({
-            success: false,
-            message: `Could not read attachment "${att.fileName || storagePath}"`
-          });
-        }
-      }
-    }
-
-    const result = await emailProviderGateway.sendEmail({
-      organizationId: orgId,
-      to: toList,
-      subject: subject.trim(),
-      text: textBody || undefined,
-      html: body || undefined,
-      replyTo: replyToAddr,
-      attachments: emailAttachments
-    });
-
+    const docLean = await Communication.findById(doc._id).lean();
+    const result = await outboundEmailSendService.sendOutboundCommunication(docLean);
     const finalStatus = result.success ? 'sent' : 'failed';
-    await Communication.findByIdAndUpdate(doc._id, {
-      status: finalStatus,
-      sentAt: new Date(),
-      ...(result.messageId && { externalMessageId: result.messageId }),
-      ...(result.success && { 'metadata.provider': result.provider || 'unknown' })
-    });
+    await Communication.findByIdAndUpdate(
+      doc._id,
+      outboundEmailSendService.buildCommunicationUpdateFromSendResult(result)
+    );
   await appendCommunicationEvent({
     organizationId: orgId,
     communicationId: doc._id,
@@ -582,6 +579,14 @@ exports.sendEmail = async (req, res) => {
     }
 
     const updated = await Communication.findById(doc._id).lean();
+    if (!result.success) {
+      return res.status(502).json({
+        success: false,
+        message: result.error || 'Failed to send email',
+        code: result.code || 'SEND_FAILED',
+        data: updated
+      });
+    }
     return res.status(200).json({ success: true, data: updated });
   } catch (err) {
     console.error('[communicationsController] sendEmail error:', err);
@@ -1632,6 +1637,134 @@ const EMAIL_TEMPLATES = [
  * GET /api/communications/templates
  * Returns predefined email templates (Phase 3.5).
  */
+async function resolvePreviewFromAddress(req, { orgId, moduleKey, mailboxId }) {
+  const user = req.user;
+  let fromEmail = String(user?.email || process.env.EMAIL_FROM || '').trim();
+  let fromName = '';
+  let fromSource = 'user';
+
+  const applyMailbox = (mb) => {
+    const addr = outboundEmailSendService.resolveMailboxFromAddress(mb);
+    if (!addr) return false;
+    fromEmail = addr;
+    fromName = String(mb.label || '').trim();
+    fromSource = 'mailbox';
+    return true;
+  };
+
+  const mailboxIdRaw = String(mailboxId || '').trim();
+  if (mailboxIdRaw && mongoose.Types.ObjectId.isValid(mailboxIdRaw)) {
+    const mb = await Mailbox.findOne({ _id: mailboxIdRaw, organizationId: orgId }).lean();
+    if (mb && canUserAccessMailboxThreads(user, mb) && applyMailbox(mb)) {
+      return { fromEmail, fromName, fromSource };
+    }
+  }
+
+  const runtimeConfig = await getCommunicationConfigForOrganization(orgId);
+  const outboundPolicy = runtimeConfig.outboundEmail || {};
+  if (
+    moduleKey === 'workspace'
+    || outboundPolicy.requireMailboxProviderForAgentSend === true
+  ) {
+    const autoMb = await resolveDefaultGmailMailboxForUser(orgId, user);
+    if (autoMb && applyMailbox(autoMb)) {
+      return { fromEmail, fromName, fromSource };
+    }
+  }
+
+  const emailService = require('../services/emailService');
+  const orgCfg = await emailService.getOrganizationEmailConfig(orgId);
+  const tenantFrom = String(orgCfg?.fromEmail || '').trim();
+  if (tenantFrom) {
+    fromEmail = tenantFrom;
+    fromName = String(orgCfg?.fromName || '').trim();
+    fromSource = 'tenant_config';
+  }
+
+  return { fromEmail, fromName, fromSource };
+}
+
+/**
+ * GET /api/communications/email/compose-preview
+ * GET /api/communications/email/reply-to-preview (alias)
+ * Query: moduleKey & recordId, or standalone=true; optional mailboxId.
+ */
+exports.previewComposeEmail = async (req, res) => {
+  try {
+    const orgId = req.user.organizationId;
+    const standalone = String(req.query.standalone || '').toLowerCase() === 'true';
+    let moduleKey = String(req.query.moduleKey || '').trim().toLowerCase();
+    let recordId = String(req.query.recordId || '').trim();
+    const mailboxId = String(req.query.mailboxId || '').trim();
+
+    if (standalone) {
+      moduleKey = 'workspace';
+      recordId = String(orgId);
+    }
+
+    if (!moduleKey || !recordId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Provide moduleKey and recordId, or standalone=true'
+      });
+    }
+
+    const { fromEmail, fromName, fromSource } = await resolvePreviewFromAddress(req, {
+      orgId,
+      moduleKey,
+      mailboxId
+    });
+
+    let replyTo = '';
+    let replyToSource = 'crm_short_token';
+    let replyToNote = '';
+    const { isShortCrmReplyTokenEnabled, getCrmReplyDomain } = require('../constants/emailReplyRouting');
+
+    if (isShortCrmReplyTokenEnabled()) {
+      replyTo = `reply+<token-on-send>@${getCrmReplyDomain()}`;
+      replyToNote =
+        'A unique reply address (e.g. reply+t92ab81@…) is assigned when you send. Replies route through the centralized CRM inbox.';
+    } else {
+      try {
+        replyTo = replyToTokenService.buildReplyToAddress({
+          orgId,
+          moduleKey,
+          recordId
+        });
+        replyToSource = 'legacy_token';
+      } catch (tokenErr) {
+        replyToSource = 'tenant_config';
+        const emailService = require('../services/emailService');
+        const orgCfg = await emailService.getOrganizationEmailConfig(orgId);
+        replyTo = String(orgCfg?.replyTo || process.env.EMAIL_REPLY_TO || '').trim();
+        replyToNote =
+          tokenErr?.message
+          || 'Inbound reply routing token unavailable; showing tenant Reply-To from settings.';
+      }
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        fromEmail,
+        fromName,
+        fromSource,
+        replyTo,
+        replyToSource,
+        ...(replyToNote ? { replyToNote } : {})
+      }
+    });
+  } catch (err) {
+    console.error('[communicationsController] previewComposeEmail:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to resolve compose addresses'
+    });
+  }
+};
+
+exports.previewReplyTo = exports.previewComposeEmail;
+
 exports.getTemplates = (req, res) => {
   return res.json({ success: true, data: { templates: EMAIL_TEMPLATES } });
 };

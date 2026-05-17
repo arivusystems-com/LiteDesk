@@ -15,7 +15,7 @@ cd server && npm install mailparser
 
 ## Environment Variables
 
-Add to `.env`:
+Add to `.env` (full R0 matrix: `server/.env.example` and `server/docs/R0_EMAIL_INFRA_RUNBOOK.md`):
 
 ```env
 # Phase 2 Inbound
@@ -25,11 +25,22 @@ EMAIL_REPLY_TOKEN_SECRET=<generate with: openssl rand -hex 32>
 
 # Phase 4 (optional): require shared secret on POST /api/webhooks/email/inbound
 EMAIL_INBOUND_WEBHOOK_SECRET=<generate with: openssl rand -hex 32>
+
+# R0 production: central catch-all — reject MIME without valid reply+/replies+ token
+# EMAIL_INBOUND_REQUIRE_REPLY_TOKEN=true
 ```
+
+Inbound decodes both **`replies+`** (default outbound) and blueprint alias **`reply+`**.
 
 Without `EMAIL_REPLY_TOKEN_SECRET`, outbound still works but Reply-To falls back to `EMAIL_REPLY_TO`.
 
 When `EMAIL_INBOUND_WEBHOOK_SECRET` is set, every inbound webhook request must send the same value as `Authorization: Bearer <secret>` or header `X-Email-Inbound-Webhook-Token: <secret>` (comparison uses constant-time equality). Leave unset for an open webhook (common in local development).
+
+## Health check (R0)
+
+```bash
+curl -s http://localhost:3000/api/webhooks/email/inbound/health | jq
+```
 
 ## Testing the Webhook Locally
 

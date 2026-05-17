@@ -15,6 +15,8 @@ const DEFAULT_CONFIG = Object.freeze({
     maxRecipientsPerMessage: 50,
     allowedModuleKeys: Array.from(SUPPORTED_MODULES),
     allowWorkspaceEmail: true,
+    disallowPlatformSmtpForWorkspace: false,
+    requireMailboxProviderForAgentSend: false,
     suppression: {
       autoSuppressOnBounce: true,
       autoSuppressOnComplaint: true
@@ -105,6 +107,10 @@ async function getCommunicationConfigForOrganization(organizationId) {
       maxRecipientsPerMessage,
       allowedModuleKeys: normalizeAllowedModules(configDoc?.outboundEmail?.allowedModuleKeys),
       allowWorkspaceEmail: configDoc?.outboundEmail?.allowWorkspaceEmail !== false,
+      disallowPlatformSmtpForWorkspace:
+        configDoc?.outboundEmail?.disallowPlatformSmtpForWorkspace === true,
+      requireMailboxProviderForAgentSend:
+        configDoc?.outboundEmail?.requireMailboxProviderForAgentSend === true,
       suppression: normalizeSuppressionConfig(configDoc?.outboundEmail?.suppression || {})
     },
     gmailInboxSync: publicGmailInboxSyncFromDoc(configDoc)
@@ -131,6 +137,9 @@ async function upsertCommunicationConfigForOrganization(organizationId, policyIn
       maxRecipientsPerMessage,
       allowedModuleKeys: normalizeAllowedModules(outboundInput.allowedModuleKeys),
       allowWorkspaceEmail: outboundInput.allowWorkspaceEmail !== false,
+      disallowPlatformSmtpForWorkspace: outboundInput.disallowPlatformSmtpForWorkspace === true,
+      requireMailboxProviderForAgentSend:
+        outboundInput.requireMailboxProviderForAgentSend === true,
       suppression: normalizeSuppressionConfig(outboundInput.suppression || {})
     }
   };

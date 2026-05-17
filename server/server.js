@@ -498,6 +498,9 @@ const gracefulShutdown = async (signal) => {
     const notificationSSEHub = require('./services/notificationSSEHub');
     console.log('[server] Shutting down notification SSE hub...');
     notificationSSEHub.shutdown();
+    const inboxSSEHub = require('./services/inboxSSEHub');
+    console.log('[server] Shutting down inbox SSE hub...');
+    inboxSSEHub.shutdown();
   } catch (err) {
     console.error('[server] Error shutting down SSE hub:', err.message);
   }

@@ -19,6 +19,15 @@ const CommunicationConfigSchema = new Schema(
       allowedModuleKeys: [{ type: String, trim: true }],
       /** Inbox “standalone” send (relatedTo.workspace); default true when unset */
       allowWorkspaceEmail: { type: Boolean, default: true },
+      /**
+       * R0/R2: When true, block platform SMTP/queue sends for workspace (inbox) mail.
+       * Use after R2 provider-native send is enabled for connected mailboxes.
+       */
+      disallowPlatformSmtpForWorkspace: { type: Boolean, default: false },
+      /**
+       * R2: When true, agent sends must use connected mailbox provider APIs (not SMTP).
+       */
+      requireMailboxProviderForAgentSend: { type: Boolean, default: false },
       suppression: {
         autoSuppressOnBounce: { type: Boolean, default: true },
         autoSuppressOnComplaint: { type: Boolean, default: true }

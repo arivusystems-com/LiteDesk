@@ -73,6 +73,8 @@ const CommunicationSchema = new Schema({
 
   /** Stable id for provider inbox sync dedupe, e.g. `gmail:<apiMessageId>`. */
   providerMessageKey: { type: String, trim: true, default: null },
+  /** Native provider thread id (e.g. Gmail threadId) for dual threading (blueprint R1). */
+  providerThreadId: { type: String, trim: true, default: null },
 
   /** Gmail label ids at import time (e.g. INBOX, STARRED) for workspace inbox filtering. */
   gmailLabelIds: [{ type: String, trim: true, maxlength: 128 }]

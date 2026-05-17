@@ -18,12 +18,31 @@ function getActiveProviderKey() {
   return 'smtp';
 }
 
+function getSystemProviderKey() {
+  if (!emailService.isSystemEmailConfigured()) return 'none';
+  const explicit = (process.env.SYSTEM_EMAIL_PROVIDER || 'oci-email-delivery').trim().toLowerCase();
+  return explicit || ociEmailDelivery.PROVIDER_KEY;
+}
+
 async function sendEmail(payload) {
-  const result = await emailService.sendEmail(payload);
+  const result = await emailService.sendCrmEmail(payload);
   return {
     ...result,
     provider: result.provider || getActiveProviderKey()
   };
+}
+
+async function sendSystemEmail(payload) {
+  const result = await emailService.sendSystemEmail(payload);
+  return {
+    ...result,
+    provider: result.provider || getSystemProviderKey(),
+    channel: 'system'
+  };
+}
+
+async function sendCrmEmail(payload) {
+  return sendEmail(payload);
 }
 
 async function isConfigured(context = {}) {
@@ -33,9 +52,17 @@ async function isConfigured(context = {}) {
   return emailService.isConfigured();
 }
 
+function isSystemConfigured() {
+  return emailService.isSystemEmailConfigured();
+}
+
 module.exports = {
   EMAIL_PROVIDER_KEY,
   getActiveProviderKey,
+  getSystemProviderKey,
   isConfigured,
-  sendEmail
+  isSystemConfigured,
+  sendEmail,
+  sendSystemEmail,
+  sendCrmEmail
 };

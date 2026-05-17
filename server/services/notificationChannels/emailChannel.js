@@ -1,5 +1,4 @@
 const User = require('../../models/User');
-const Organization = require('../../models/Organization');
 const domainEvents = require('../../constants/domainEvents');
 const emailProviderGateway = require('../../platform/communication/providers/emailProviderGateway');
 
@@ -12,19 +11,10 @@ function debugLog(event, data) {
 }
 
 /**
- * Check if email-provider integration is enabled for the organization.
- */
-async function isEmailIntegrationEnabled(organizationId) {
-  if (!organizationId) return false;
-  const org = await Organization.findById(organizationId).select('integrations').lean();
-  const state = (org?.integrations || {})[emailProviderGateway.EMAIL_PROVIDER_KEY];
-  return state?.enabled === true;
-}
-
-/**
  * Email channel implementation.
  * Handles regular notifications and digest notifications.
- * Only sends when: ENABLE_EMAIL_NOTIFICATIONS=true, email-provider integration enabled, and email service configured.
+ * Sends via the system channel (OCI Email Delivery by default), not tenant CRM/Resend settings.
+ * Requires ENABLE_EMAIL_NOTIFICATIONS=true and SYSTEM_EMAIL_* / OCI configured on the server.
  */
 async function send({ notification }) {
   try {
@@ -33,17 +23,11 @@ async function send({ notification }) {
       return { success: false, skipped: true, reason: 'email_notifications_disabled' };
     }
 
-    // Integration gate: email-provider must be enabled for this org
     const orgId = notification.organizationId;
-    const integrationEnabled = await isEmailIntegrationEnabled(orgId);
-    if (!integrationEnabled) {
-      debugLog('Skipped', { reason: 'integration_disabled', organizationId: String(orgId) });
-      return { success: false, skipped: true, reason: 'integration_disabled' };
-    }
 
-    // Email service must be configured (SES or SMTP)
-    if (!(await emailProviderGateway.isConfigured({ organizationId: orgId }))) {
-      debugLog('Skipped', { reason: 'not_configured' });
+    // R0: system notifications use SYSTEM_EMAIL_* / OCI, not tenant CRM SMTP integration.
+    if (!emailProviderGateway.isSystemConfigured()) {
+      debugLog('Skipped', { reason: 'system_email_not_configured' });
       return { success: false, skipped: true, reason: 'not_configured' };
     }
 
@@ -72,13 +56,13 @@ async function send({ notification }) {
       html = regularContent.html;
     }
 
-    const result = await emailProviderGateway.sendEmail({
+    const result = await emailProviderGateway.sendSystemEmail({
       organizationId: orgId,
       to: user.email,
       subject,
       text,
       html,
-      replyTo: process.env.EMAIL_REPLY_TO
+      replyTo: process.env.SYSTEM_EMAIL_REPLY_TO || process.env.EMAIL_REPLY_TO
     });
 
     debugLog('EmailSent', {

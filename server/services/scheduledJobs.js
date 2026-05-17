@@ -206,6 +206,28 @@ function startScheduledJobs() {
     console.log('[scheduledJobs] Gmail inbox sync scheduler disabled (ENABLE_GMAIL_INBOX_SYNC_SCHEDULER=false)');
   }
 
+  if (process.env.ENABLE_GMAIL_PUSH !== 'false' && String(process.env.GMAIL_PUBSUB_TOPIC || '').includes('/topics/')) {
+    const { tickRenewGmailWatches } = require('./gmailWatchRenewalSchedulerService');
+    const watchCron = String(process.env.GMAIL_WATCH_RENEW_CRON || '15 4 * * *').trim();
+    try {
+      if (cron.validate(watchCron)) {
+        cron.schedule(watchCron, async () => {
+          try {
+            const r = await tickRenewGmailWatches();
+            if (process.env.GMAIL_INBOX_SYNC_SCHEDULER_DEBUG === 'true') {
+              console.log('[scheduledJobs] Gmail watch renewal:', r);
+            }
+          } catch (err) {
+            console.error('[scheduledJobs] Gmail watch renewal failed:', err.message);
+          }
+        }, { scheduled: true, timezone: process.env.DIGEST_TIMEZONE || 'UTC' });
+        console.log(`[scheduledJobs]   - Gmail watch renewal: cron "${watchCron}"`);
+      }
+    } catch (err) {
+      console.error('[scheduledJobs] Gmail watch renewal scheduler failed:', err.message);
+    }
+  }
+
   if (ENABLE_SNOOZE_WAKE_NOTIFICATION_SCHEDULER) {
     snoozeWakeNotificationJob = cron.schedule('* * * * *', async () => {
       try {

@@ -23,6 +23,20 @@
 /** @type {InboxProviderDefinition[]} */
 export const INBOX_PROVIDERS = [
   {
+    id: 'google-smtp',
+    name: 'Gmail (SMTP)',
+    subtitle: 'App Password',
+    integrationLabel: 'smtp.gmail.com — send via Google App Password',
+    status: 'available',
+    iconType: 'letter',
+    iconLetter: 'G',
+    iconStyle:
+      'background: conic-gradient(from -45deg, #ea4335, #fbbc05, #34a853, #4285f4, #ea4335)',
+    emailPlaceholder: 'you@company.com',
+    connectHint:
+      'Your admin must enable Gmail SMTP under Settings → Integrations. Use a Google App Password (not your login password).'
+  },
+  {
     id: 'google',
     name: 'Gmail',
     subtitle: 'Google Workspace',
@@ -81,6 +95,9 @@ export function isMailboxConnectedForProvider(mailbox, providerId) {
   if (!mailbox) return false;
   if (providerId === 'google') {
     return mailbox.gmailInboxSync?.connected === true;
+  }
+  if (providerId === 'google-smtp') {
+    return mailbox.gmailSmtpOutbound?.connected === true;
   }
   return false;
 }

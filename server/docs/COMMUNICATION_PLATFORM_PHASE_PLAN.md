@@ -242,6 +242,34 @@ Suggested next within Phase 6:
 
 - **Microsoft Graph / IMAP** (and other providers) — same pattern as Gmail (`forcedWorkspaceInbox` + `providerMessageKey`).
 
+**Full blueprint completion plan:** see [CRM_EMAIL_BLUEPRINT_ROADMAP.md](./CRM_EMAIL_BLUEPRINT_ROADMAP.md) (phases R0–R7: shared mailbox sync, provider-native send, realtime inbox, OCI storage, Graph/IMAP, SLA, AI).
+
+## Phase 7 — Blueprint R0: Infrastructure & routing (in progress)
+
+**Goal:** central reply routing, system vs CRM send split, production env/runbook.
+
+Completed in this iteration:
+
+- **System vs CRM send:** `platform/communication/email/runtimeConfigResolver.js`; `emailService.sendSystemEmail` / `sendCrmEmail`; notifications use **system** channel (OCI default via `SYSTEM_EMAIL_PROVIDER`).
+- **Inbound:** `GET /api/webhooks/email/inbound/health`; `EMAIL_INBOUND_REQUIRE_REPLY_TOKEN`; decode **`reply+`** and **`replies+`** token prefixes.
+- **Policy:** `CommunicationConfig.outboundEmail.disallowPlatformSmtpForWorkspace` + `requireMailboxProviderForAgentSend` (R2 enforcement).
+- **Docs:** [R0_EMAIL_INFRA_RUNBOOK.md](./R0_EMAIL_INFRA_RUNBOOK.md); `.env.example` R0 matrix.
+
+Ops still required (see runbook): DNS, Workspace catch-all, SPF/DKIM/DMARC, production secrets.
+
+## Phase 8 — Blueprint R1: Shared mailbox Gmail sync (completed)
+
+**Goal:** `support@company.com` style shared inboxes sync via Gmail API like personal mailboxes.
+
+Completed in this iteration:
+
+- **Group Gmail OAuth:** admins connect Google for `Mailbox.kind === 'group'`; optional email address must match Google account.
+- **ACL:** `mailboxAccessService` — admin manage connect; members may run manual sync.
+- **Scheduler:** background sync includes personal + group mailboxes with `inboxProvider: google`.
+- **`providerThreadId`** on `Communication` from Gmail `threadId` during sync ingest.
+- **`gmailSyncMaxMessagesPerRun`** on mailbox + `GMAIL_INBOX_SYNC_MAX_MESSAGES_PER_RUN` env.
+- **UI:** Connect modal `mailboxKind=group`; inbox Connect on shared rows; sync banner for selected shared mailbox.
+
 ---
 
 ## Historical “Suggested next” (cross-phase)

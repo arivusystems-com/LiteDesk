@@ -64,8 +64,24 @@ const MailboxSchema = new Schema(
      */
     gmailSyncLabelIds: [{ type: String, trim: true, maxlength: 128 }],
     gmailHistoryId: { type: String, trim: true, default: '' },
+    /** Gmail Pub/Sub watch expiration (R3.1). */
+    gmailWatchExpiration: { type: Date, default: null },
+    gmailWatchTopic: { type: String, trim: true, default: '' },
+    /** Override messages imported per sync run (else env GMAIL_INBOX_SYNC_MAX_MESSAGES_PER_RUN). */
+    gmailSyncMaxMessagesPerRun: { type: Number, min: 1, max: 200, default: null },
     lastInboxSyncAt: { type: Date, default: null },
-    lastInboxSyncError: { type: String, trim: true, default: '', maxlength: 2000 }
+    lastInboxSyncError: { type: String, trim: true, default: '', maxlength: 2000 },
+    /**
+     * Outbound send channel when org uses Gmail SMTP (Settings → Integrations).
+     * `gmail_api` = Gmail API (OAuth). `gmail_smtp` = per-mailbox App Password via org SMTP relay.
+     */
+    outboundChannel: {
+      type: String,
+      enum: ['none', 'gmail_api', 'gmail_smtp'],
+      default: 'none'
+    },
+    smtpOutboundEncryptedAppPassword: { type: String, default: '' },
+    smtpOutboundVerifiedAt: { type: Date, default: null }
   },
   { timestamps: true }
 );

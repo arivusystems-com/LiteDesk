@@ -15,6 +15,10 @@
  */
 
 const crypto = require('crypto');
+const {
+  buildCrmReplyToAddress,
+  CRM_REPLY_LOCAL_PREFIX
+} = require('../constants/emailReplyRouting');
 
 const TOKEN_VERSION = 1;
 const SEP = '.';
@@ -82,8 +86,8 @@ function decodeToken(address) {
 
   if (!address || typeof address !== 'string') return null;
 
-  // Match plus-addressing: replies+{token}@...
-  const match = address.match(/replies\+([^@]+)@/);
+  // Match plus-addressing: replies+{token}@... or reply+{token}@... (blueprint alias)
+  const match = address.match(/(?:replies|reply)\+([^@]+)@/i);
   if (!match) return null;
 
   const fullToken = match[1];
@@ -112,13 +116,42 @@ function decodeToken(address) {
  * @param {string[]} addresses - Array of parsed addresses
  * @returns {{ orgId: string, moduleKey: string, recordId: string } | null}
  */
-function extractFromAddresses(addresses) {
+/**
+ * Extract short CRM token from reply+abc123@domain (enterprise routing).
+ * @param {string} address
+ * @returns {string | null} crmThreadToken
+ */
+function extractCrmThreadToken(address) {
+  if (!address || typeof address !== 'string') return null;
+  const match = address.match(
+    new RegExp(`${CRM_REPLY_LOCAL_PREFIX}\\+([a-z0-9]{6,16})@`, 'i')
+  );
+  return match ? String(match[1]).toLowerCase() : null;
+}
+
+function extractCrmThreadTokenFromAddresses(addresses) {
   if (!Array.isArray(addresses)) return null;
   for (const addr of addresses) {
     const email = typeof addr === 'string' ? addr : (addr?.address || addr?.value?.[0]?.address);
     if (email) {
+      const token = extractCrmThreadToken(email);
+      if (token) return token;
+    }
+  }
+  return null;
+}
+
+function extractFromAddresses(addresses) {
+  if (!Array.isArray(addresses)) return null;
+  const short = extractCrmThreadTokenFromAddresses(addresses);
+  if (short) {
+    return { crmThreadToken: short, tokenType: 'short' };
+  }
+  for (const addr of addresses) {
+    const email = typeof addr === 'string' ? addr : (addr?.address || addr?.value?.[0]?.address);
+    if (email) {
       const decoded = decodeToken(email);
-      if (decoded) return decoded;
+      if (decoded) return { ...decoded, tokenType: 'legacy' };
     }
   }
   return null;
@@ -127,6 +160,9 @@ function extractFromAddresses(addresses) {
 module.exports = {
   encodeToken,
   buildReplyToAddress,
+  buildCrmReplyToAddress,
   decodeToken,
+  extractCrmThreadToken,
+  extractCrmThreadTokenFromAddresses,
   extractFromAddresses
 };

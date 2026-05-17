@@ -7,33 +7,41 @@
 
 const EMAIL_PROVIDER_KEY = 'email-provider';
 const ociEmailDelivery = require('./emailProviders/ociEmailDelivery');
+const {
+  resolveSystemRuntimeConfig,
+  resolveCrmRuntimeConfig
+} = require('../platform/communication/email/runtimeConfigResolver');
 
 function isTruthy(value) {
   return String(value || '').toLowerCase() === 'true';
 }
 
+/** @deprecated Use resolveCrmRuntimeConfig — kept for callers passing raw org config objects */
 function resolveRuntimeConfig(config = {}) {
-  const smtpPort = parseInt(config.smtpPort || process.env.SMTP_PORT || '0', 10);
-  const base = {
-    provider: config.provider || process.env.EMAIL_PROVIDER || '',
-    fromEmail: config.fromEmail || process.env.EMAIL_FROM || '',
-    fromName: config.fromName || process.env.EMAIL_FROM_NAME || 'Arivu Systems',
-    replyTo: config.replyTo || process.env.EMAIL_REPLY_TO || '',
-    ociRegion: config.ociRegion || process.env.OCI_EMAIL_REGION || process.env.OCI_REGION || '',
-    smtpHost: config.smtpHost || process.env.SMTP_HOST || '',
-    smtpPort: Number.isNaN(smtpPort) ? 0 : smtpPort,
-    smtpUser: config.smtpUser || process.env.SMTP_USER || '',
-    smtpPass: config.smtpPass || process.env.SMTP_PASS || '',
-    smtpSecure: config.smtpSecure === true || isTruthy(config.smtpSecure) || smtpPort === 465,
-    awsRegion: config.awsRegion || process.env.AWS_SES_REGION || '',
-    awsAccessKeyId: config.awsAccessKeyId || process.env.AWS_SES_ACCESS_KEY_ID || '',
-    awsSecretAccessKey: config.awsSecretAccessKey || process.env.AWS_SES_SECRET_ACCESS_KEY || '',
-  };
-  return ociEmailDelivery.applyOciEmailDeliveryDefaults(base);
+  return resolveCrmRuntimeConfig(config);
+}
+
+async function resolveRuntimeConfigForChannel(channel = 'crm', organizationId = null) {
+  if (channel === 'system') {
+    return resolveSystemRuntimeConfig();
+  }
+  const orgConfig = await getOrganizationEmailConfig(organizationId);
+  return resolveCrmRuntimeConfig(orgConfig || {});
+}
+
+function isRuntimeConfigReady(runtimeConfig) {
+  if (!runtimeConfig?.fromEmail) return false;
+  if (shouldUseOciSmtp(runtimeConfig) && ociEmailDelivery.isOciEmailDeliveryConfigured(runtimeConfig)) {
+    return true;
+  }
+  if (shouldUseSes(runtimeConfig) && createSesClient(runtimeConfig)) return true;
+  return !!createSmtpTransport(runtimeConfig);
 }
 
 function normalizeProviderKey(runtimeConfig = {}) {
-  return String(runtimeConfig.provider || '').trim().toLowerCase();
+  const p = String(runtimeConfig.provider || '').trim().toLowerCase();
+  if (p === 'gmail-smtp') return 'smtp';
+  return p;
 }
 
 function shouldUseSes(runtimeConfig = {}) {
@@ -133,25 +141,18 @@ async function getOrganizationEmailConfig(organizationId) {
  */
 function isConfigured() {
   if (process.env.ENABLE_EMAIL_NOTIFICATIONS === 'false') return false;
-  const runtimeConfig = resolveRuntimeConfig();
-  if (!runtimeConfig.fromEmail) return false;
-  if (shouldUseOciSmtp(runtimeConfig) && ociEmailDelivery.isOciEmailDeliveryConfigured(runtimeConfig)) {
-    return true;
-  }
-  if (shouldUseSes(runtimeConfig) && createSesClient(runtimeConfig)) return true;
-  return !!createSmtpTransport(runtimeConfig);
+  return isRuntimeConfigReady(resolveCrmRuntimeConfig());
+}
+
+function isSystemEmailConfigured() {
+  if (process.env.ENABLE_EMAIL_NOTIFICATIONS === 'false') return false;
+  return isRuntimeConfigReady(resolveSystemRuntimeConfig());
 }
 
 async function isConfiguredForOrganization(organizationId) {
   if (process.env.ENABLE_EMAIL_NOTIFICATIONS === 'false') return false;
-  const orgConfig = await getOrganizationEmailConfig(organizationId);
-  const runtimeConfig = resolveRuntimeConfig(orgConfig || {});
-  if (!runtimeConfig.fromEmail) return false;
-  if (shouldUseOciSmtp(runtimeConfig) && ociEmailDelivery.isOciEmailDeliveryConfigured(runtimeConfig)) {
-    return true;
-  }
-  if (shouldUseSes(runtimeConfig) && createSesClient(runtimeConfig)) return true;
-  return !!createSmtpTransport(runtimeConfig);
+  const runtimeConfig = await resolveRuntimeConfigForChannel('crm', organizationId);
+  return isRuntimeConfigReady(runtimeConfig);
 }
 
 /**
@@ -197,11 +198,20 @@ async function sendViaResendApi(runtimeConfig, payload) {
 
 /**
  * Send an email.
- * @param {Object} opts - { to, subject, text, html?, replyTo?, attachments? [{ filename, content }] }
+ * @param {Object} opts - { to, subject, text, html?, replyTo?, attachments?, organizationId?, channel?: 'crm'|'system' }
  * @returns {Promise<{ success: boolean, messageId?: string, error?: string }>}
  */
 async function sendEmail(opts) {
-  const { to, subject, text, html, replyTo, attachments = [], organizationId } = opts || {};
+  const {
+    to,
+    subject,
+    text,
+    html,
+    replyTo,
+    attachments = [],
+    organizationId,
+    channel = 'crm'
+  } = opts || {};
   if (!to || !subject) {
     return { success: false, error: 'Missing to or subject' };
   }
@@ -211,8 +221,7 @@ async function sendEmail(opts) {
     return { success: false, error: 'Missing to address' };
   }
 
-  const orgConfig = await getOrganizationEmailConfig(organizationId);
-  const runtimeConfig = resolveRuntimeConfig(orgConfig || {});
+  const runtimeConfig = await resolveRuntimeConfigForChannel(channel, organizationId);
   const from = runtimeConfig.fromName
     ? `"${runtimeConfig.fromName}" <${runtimeConfig.fromEmail || 'noreply@arivusystems.com'}>`
     : (runtimeConfig.fromEmail || getFromAddress());
@@ -329,10 +338,24 @@ async function sendEmail(opts) {
   return { success: false, error: 'Email service not configured' };
 }
 
+/** System mail (notifications, OTP, password reset) — OCI by default, ignores tenant CRM provider. */
+async function sendSystemEmail(opts) {
+  return sendEmail({ ...opts, channel: 'system' });
+}
+
+/** CRM/agent transactional mail — tenant integration + EMAIL_PROVIDER. */
+async function sendCrmEmail(opts) {
+  return sendEmail({ ...opts, channel: 'crm' });
+}
+
 module.exports = {
   EMAIL_PROVIDER_KEY,
   isConfigured,
+  isSystemEmailConfigured,
   isConfiguredForOrganization,
   getOrganizationEmailConfig,
-  sendEmail
+  resolveRuntimeConfigForChannel,
+  sendEmail,
+  sendSystemEmail,
+  sendCrmEmail
 };

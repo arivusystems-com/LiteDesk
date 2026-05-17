@@ -7,7 +7,7 @@ module.exports = [
   {
     key: 'email-provider',
     name: 'Email Provider',
-    description: 'Send emails such as notifications, alerts, and updates using your preferred email service.',
+    description: 'Configure CRM outbound email (Resend, SMTP, OCI, AWS SES, Gmail SMTP), send policies, Gmail inbox, inbound webhooks, and deliverability.',
     scope: 'platform',
     apps: ['SALES', 'HELPDESK', 'PROJECTS', 'AUDIT', 'PORTAL'],
     category: 'Communication',

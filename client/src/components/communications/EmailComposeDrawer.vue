@@ -56,6 +56,28 @@
                 {{ error }}
               </div>
 
+              <!-- From (read-only; matches server send resolution) -->
+              <div>
+                <label class="block text-sm/6 font-medium text-gray-900 dark:text-white">From</label>
+                <input
+                  :value="fromDisplayLine"
+                  type="text"
+                  readonly
+                  class="block w-full mt-2 rounded-md bg-gray-50 dark:bg-gray-800/80 px-3 py-2 text-gray-700 dark:text-gray-300 text-base outline-1 -outline-offset-1 outline-gray-300/20 sm:text-sm/6 dark:outline-white/10 cursor-default font-mono text-[13px]"
+                  :placeholder="composePreviewLoading ? 'Loading…' : '—'"
+                >
+                <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ fromSourceHint }}
+                  <span v-if="sendingMailbox?.viaSmtp" class="text-gray-400 dark:text-gray-500"> · Gmail SMTP</span>
+                </p>
+                <p
+                  v-if="!fromDisplayLine && sendingMailboxHint"
+                  class="mt-1 text-xs text-amber-700 dark:text-amber-300"
+                >
+                  {{ sendingMailboxHint }}
+                </p>
+              </div>
+
               <!-- To (editable, pre-filled) -->
               <div>
                 <label class="block text-sm/6 font-medium text-gray-900 dark:text-white">To</label>
@@ -106,6 +128,29 @@
                   class="block w-full mt-2 rounded-md bg-gray-100 dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white text-base outline-1 -outline-offset-1 outline-gray-300/20 placeholder:text-gray-500 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-500 sm:text-sm/6 dark:focus:bg-gray-800 dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
                   placeholder="bcc@example.com (comma-separated)"
                 />
+              </div>
+
+              <!-- Reply-To (routing address for recipient replies) -->
+              <div>
+                <label class="block text-sm/6 font-medium text-gray-900 dark:text-white">Reply-To</label>
+                <input
+                  :value="replyToDisplay"
+                  type="text"
+                  readonly
+                  class="block w-full mt-2 rounded-md bg-gray-50 dark:bg-gray-800/80 px-3 py-2 text-gray-700 dark:text-gray-300 text-base outline-1 -outline-offset-1 outline-gray-300/20 sm:text-sm/6 dark:outline-white/10 cursor-default font-mono text-[13px]"
+                  :placeholder="composePreviewLoading ? 'Loading…' : '—'"
+                >
+                <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  When recipients hit Reply, their message is sent here and routed into
+                  <template v-if="standaloneMode">your Inbox</template>
+                  <template v-else>this record’s email thread</template>.
+                </p>
+                <p
+                  v-if="replyToNote"
+                  class="mt-1 text-xs text-amber-700 dark:text-amber-300"
+                >
+                  {{ replyToNote }}
+                </p>
               </div>
 
               <!-- Subject -->
@@ -290,6 +335,30 @@ const props = defineProps({
   initialDraft: {
     type: Object,
     default: null
+  },
+  /** Connected mailbox used for provider send (Gmail API). */
+  sendingMailbox: {
+    type: Object,
+    default: null
+  },
+  /** Shown when no mailbox is selected but provider send may be required. */
+  sendingMailboxHint: {
+    type: String,
+    default: ''
+  },
+  /** Pre-resolved Reply-To (skips preview fetch when set). */
+  initialReplyTo: {
+    type: String,
+    default: ''
+  },
+  /** Pre-resolved From email (optional). */
+  initialFrom: {
+    type: String,
+    default: ''
+  },
+  initialFromName: {
+    type: String,
+    default: ''
   }
 });
 
@@ -311,6 +380,33 @@ const error = ref(null);
 const attachments = ref([]);
 const uploading = ref(false);
 const fileInputRef = ref(null);
+const fromEmailDisplay = ref('');
+const fromNameDisplay = ref('');
+const fromSource = ref('');
+const replyToDisplay = ref('');
+const replyToNote = ref('');
+const composePreviewLoading = ref(false);
+
+const fromDisplayLine = computed(() => {
+  const email = String(fromEmailDisplay.value || '').trim();
+  const name = String(fromNameDisplay.value || '').trim();
+  if (!email) return '';
+  if (name) return `${name} <${email}>`;
+  return email;
+});
+
+const fromSourceHint = computed(() => {
+  if (fromSource.value === 'mailbox') {
+    return 'Sending from your connected mailbox.';
+  }
+  if (fromSource.value === 'tenant_config') {
+    return 'Sending from your organization email (Settings → Integrations → Email).';
+  }
+  if (fromSource.value === 'user') {
+    return 'Sending from your user account (fallback when no mailbox or org From is set).';
+  }
+  return 'From address is resolved when you send.';
+});
 
 function parseEmails(s) {
   return (s || '')
@@ -349,6 +445,57 @@ function handleTemplateChange(v) {
   applyTemplate();
 }
 
+async function loadComposePreview() {
+  const presetFrom = String(props.initialFrom || props.initialDraft?.from || '').trim();
+  const presetFromName = String(props.initialFromName || props.initialDraft?.fromName || '').trim();
+  const presetReplyTo = String(props.initialReplyTo || props.initialDraft?.replyTo || '').trim();
+
+  if (presetFrom && presetReplyTo) {
+    fromEmailDisplay.value = presetFrom;
+    fromNameDisplay.value = presetFromName;
+    fromSource.value = props.sendingMailbox?.emailAddress ? 'mailbox' : 'tenant_config';
+    replyToDisplay.value = presetReplyTo;
+    replyToNote.value = '';
+    composePreviewLoading.value = false;
+    return;
+  }
+
+  composePreviewLoading.value = true;
+  replyToNote.value = '';
+  try {
+    const params = new URLSearchParams();
+    if (props.standaloneMode) {
+      params.set('standalone', 'true');
+    } else if (props.relatedTo?.moduleKey && props.relatedTo?.recordId) {
+      params.set('moduleKey', String(props.relatedTo.moduleKey));
+      params.set('recordId', String(props.relatedTo.recordId));
+    } else {
+      fromEmailDisplay.value = presetFrom || String(props.sendingMailbox?.emailAddress || '').trim();
+      fromNameDisplay.value = presetFromName || String(props.sendingMailbox?.label || '').trim();
+      fromSource.value = fromEmailDisplay.value ? (props.sendingMailbox ? 'mailbox' : '') : '';
+      replyToDisplay.value = presetReplyTo;
+      composePreviewLoading.value = false;
+      return;
+    }
+    const mbId = props.sendingMailbox?.id || props.initialDraft?.mailboxId;
+    if (mbId) params.set('mailboxId', String(mbId));
+
+    const data = await apiClient.get(`/communications/email/compose-preview?${params.toString()}`);
+    fromEmailDisplay.value = data?.data?.fromEmail || presetFrom || '';
+    fromNameDisplay.value = data?.data?.fromName || presetFromName || '';
+    fromSource.value = data?.data?.fromSource || '';
+    replyToDisplay.value = data?.data?.replyTo || presetReplyTo || '';
+    replyToNote.value = data?.data?.replyToNote || data?.data?.note || '';
+  } catch {
+    fromEmailDisplay.value = presetFrom || String(props.sendingMailbox?.emailAddress || '').trim();
+    fromNameDisplay.value = presetFromName || String(props.sendingMailbox?.label || '').trim();
+    replyToDisplay.value = presetReplyTo;
+    replyToNote.value = 'Could not load Reply-To address.';
+  } finally {
+    composePreviewLoading.value = false;
+  }
+}
+
 watch(() => props.isOpen, (open) => {
   if (open) {
     form.value.to = props.initialDraft?.to || props.initialTo || '';
@@ -362,6 +509,13 @@ watch(() => props.isOpen, (open) => {
     showBcc.value = Boolean((props.initialDraft?.bcc || '').trim());
     selectedTemplateId.value = '';
     loadTemplates();
+    void loadComposePreview();
+  } else {
+    fromEmailDisplay.value = '';
+    fromNameDisplay.value = '';
+    fromSource.value = '';
+    replyToDisplay.value = '';
+    replyToNote.value = '';
   }
 });
 
